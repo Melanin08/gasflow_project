@@ -79,6 +79,7 @@ h3 {
 }
 
 .status-strip span,
+.status-strip a,
 .pill {
   display: inline-flex;
   align-items: center;
@@ -90,6 +91,7 @@ h3 {
   color: #23513b;
   font-size: 0.86rem;
   font-weight: 700;
+  text-decoration: none;
 }
 
 .view-tabs {
@@ -295,6 +297,7 @@ small {
   background: #ffffff;
   color: #183327;
   cursor: pointer;
+  text-decoration: none;
 }
 
 .icon-button {
@@ -314,6 +317,32 @@ small {
 .admin-actions {
   display: grid;
   gap: 10px;
+}
+
+.location-flow,
+.payment-flow {
+  display: grid;
+  gap: 14px;
+}
+
+.field-label {
+  display: grid;
+  gap: 8px;
+  color: #34483d;
+  font-size: 0.86rem;
+  font-weight: 850;
+}
+
+.field-label input,
+.field-label select {
+  width: 100%;
+  min-height: 46px;
+  border: 1px solid #cfded5;
+  border-radius: 8px;
+  padding: 0 13px;
+  background: #ffffff;
+  color: #17221d;
+  font: inherit;
 }
 
 .depot-row,
@@ -359,9 +388,153 @@ small {
   background: #fbfdfb;
 }
 
+.route-card,
+.payment-terminal,
+.payment-success,
+.live-route-panel {
+  border: 1px solid #dbe5de;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.route-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+}
+
+.route-card span,
+.payment-success span {
+  display: grid;
+  gap: 4px;
+}
+
+.payment-terminal {
+  display: grid;
+  gap: 13px;
+  padding: 16px;
+}
+
+.payment-terminal h3 {
+  margin-bottom: 4px;
+}
+
+.terminal-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid #edf1ee;
+  padding-top: 12px;
+}
+
+.full-width {
+  width: 100%;
+}
+
+.payment-success {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  background: #edf8f0;
+  color: #17623b;
+}
+
 .tracking-card {
   display: grid;
   gap: 18px;
+}
+
+.live-route-panel {
+  display: grid;
+  gap: 12px;
+  padding: 15px;
+}
+
+.live-route-track {
+  position: relative;
+  height: 18px;
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, #2f7c51 0%, #2f7c51 var(--rider-progress, 38%), #dbe5de var(--rider-progress, 38%));
+}
+
+.live-route-track::before,
+.live-route-track::after {
+  position: absolute;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  content: "";
+  border-radius: 50%;
+  background: #163f2b;
+  transform: translateY(-50%);
+}
+
+.live-route-track::before {
+  left: 0;
+}
+
+.live-route-track::after {
+  right: 0;
+  background: #0891b2;
+}
+
+.live-route-track span {
+  position: absolute;
+  top: 50%;
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  background: #fbbf24;
+  color: #1f2933;
+  box-shadow: 0 10px 22px rgba(31, 51, 40, 0.18);
+  transform: translate(-50%, -50%);
+  transition: left 0.45s ease;
+}
+
+.tracking-detail,
+.contact-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #405147;
+  font-size: 0.9rem;
+  font-weight: 750;
+}
+
+.contact-link {
+  width: fit-content;
+  border: 1px solid #cfded5;
+  border-radius: 8px;
+  padding: 9px 11px;
+  background: #f8faf7;
+  color: #163f2b;
+  text-decoration: none;
+}
+
+.contact-link.compact {
+  white-space: nowrap;
+}
+
+.live-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.icon-button.wide {
+  width: auto;
+  padding: 0 14px;
+  font-weight: 800;
 }
 
 .rider-strip {
@@ -475,13 +648,84 @@ small {
   background-size: 32px 32px;
 }
 
-.route-line {
+.summary-map.real-map {
+  background: #dce7e0;
+}
+
+.summary-map.real-map iframe {
   position: absolute;
-  inset: 52px 78px;
-  border: 4px dashed #2f7c51;
-  border-left: 0;
-  border-bottom: 0;
-  border-radius: 0 70px 0 0;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.summary-map.inline-map {
+  min-height: 280px;
+  margin: 0;
+}
+
+.map-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.route-line {
+  display: none;
+}
+
+.moving-route {
+  display: none;
+}
+
+.route-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.route-shadow,
+.route-path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.route-shadow {
+  stroke: rgba(22, 101, 52, 0.14);
+  stroke-width: 12;
+}
+
+.route-path {
+  stroke: #2f7c51;
+  stroke-dasharray: 10 9;
+  stroke-width: 5;
+  animation: routeDash 1.6s linear infinite;
+}
+
+.checkpoint {
+  position: absolute;
+  width: 13px;
+  height: 13px;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  background: #0891b2;
+  box-shadow: 0 8px 16px rgba(31, 51, 40, 0.15);
+}
+
+.checkpoint-one {
+  left: 51%;
+  top: 47%;
+}
+
+.checkpoint-two {
+  left: 36%;
+  top: 61%;
 }
 
 .pin {
@@ -499,19 +743,45 @@ small {
 }
 
 .customer-pin {
-  left: 28px;
-  bottom: 32px;
+  left: 18%;
+  top: 78%;
+  transform: translate(-50%, -50%);
 }
 
 .depot-pin {
-  top: 32px;
-  right: 30px;
+  left: 78%;
+  top: 18%;
+  transform: translate(-50%, -50%);
 }
 
 .rider-pin {
-  top: 108px;
-  left: 47%;
+  transform: translate(-50%, -50%);
   background: #fbbf24;
+  transition: left 0.45s ease, top 0.45s ease, transform 0.45s ease;
+}
+
+.rider-pin.active {
+  transform: translate(-50%, -58%);
+}
+
+.map-meta {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 12px;
+  display: grid;
+  gap: 2px;
+  border: 1px solid rgba(207, 222, 213, 0.9);
+  border-radius: 8px;
+  padding: 10px 11px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #20352a;
+  box-shadow: 0 10px 24px rgba(31, 51, 40, 0.10);
+}
+
+.map-meta span {
+  color: #66756d;
+  font-size: 0.8rem;
 }
 
 .order-summary {
@@ -701,6 +971,26 @@ small {
   padding: 12px;
   background: #ffffff;
   font-weight: 800;
+}
+
+@keyframes routePulse {
+  0% {
+    opacity: 0.45;
+  }
+
+  50% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0.45;
+  }
+}
+
+@keyframes routeDash {
+  to {
+    stroke-dashoffset: -19;
+  }
 }
 
 @media (max-width: 900px) {
