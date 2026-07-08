@@ -1,6 +1,6 @@
-# GasFlow
+# Zanzibar LPG Stores
 
-React frontend for checking the GasFlow customer, supplier, and admin process.
+React frontend for checking LPG ordering, store selection, delivery tracking, and admin/store operations for Fuoni, Bububu, and Mombasa gas stores in Zanzibar.
 
 ## Requirements
 

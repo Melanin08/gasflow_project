@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
-  BadgeCheck,
   Banknote,
   Bell,
   Bike,
@@ -37,51 +36,53 @@ import "./styles.css";
 const gasTypes = [
   {
     id: "lpg",
-    name: "LPG Cylinder",
+    name: "LPG Cylinder Refill",
     price: 28000,
-    note: "Fast home delivery",
-    options: ["6kg", "13kg", "22kg"]
+    note: "Same-day Zanzibar delivery",
+    options: ["6kg", "15kg", "38kg"]
   },
   {
-    id: "natural",
-    name: "Natural Gas Refill",
-    price: 42000,
-    note: "Verified refill depots",
-    options: ["Small", "Standard", "Large"]
+    id: "starter",
+    name: "New Cylinder Setup",
+    price: 76000,
+    note: "Cylinder, regulator, and hose",
+    options: ["6kg kit", "15kg kit", "Regulator"]
   },
   {
     id: "bulk",
-    name: "Industrial/Bulk Gas",
+    name: "Commercial LPG Supply",
     price: 185000,
-    note: "Scheduled commercial supply",
-    options: ["50kg", "100kg", "Bulk"]
+    note: "Hotels, cafes, and shops",
+    options: ["38kg", "2 x 38kg", "Scheduled"]
   }
 ];
 
 const depots = [
-  { name: "Kariakoo Depot", distance: "1.8 km", status: "Open", stock: 42, rating: 4.8, eta: 18, route: "Ohio St - Morogoro Rd - Lumumba St", lat: -6.8235, lng: 39.2695 },
-  { name: "Mikocheni Gas Hub", distance: "3.4 km", status: "Open", stock: 18, rating: 4.6, eta: 29, route: "Old Bagamoyo Rd - Rose Garden Rd", lat: -6.7627, lng: 39.2484 },
-  { name: "Airport Road Supply", distance: "6.2 km", status: "Low stock", stock: 5, rating: 4.4, eta: 41, route: "Nyerere Rd - Airport Access Rd", lat: -6.8734, lng: 39.2026 }
+  { name: "Fuoni Gas Store, Zanzibar", distance: "Selected store", status: "Open", stock: 36, rating: 4.8, eta: 18, route: "Fuoni service area, Zanzibar", lat: -6.183, lng: 39.250 },
+  { name: "Bububu Gas Store, Zanzibar", distance: "Selected store", status: "Open", stock: 42, rating: 4.8, eta: 15, route: "Bububu service area, Zanzibar", lat: -6.100, lng: 39.217 },
+  { name: "Mombasa Gas Store, Zanzibar", distance: "Selected store", status: "Open", stock: 28, rating: 4.7, eta: 20, route: "Mombasa service area, Zanzibar", lat: -6.176, lng: 39.246 }
 ];
 
 const deliveryLocations = [
-  { name: "Kijitonyama, Dar es Salaam", lat: -6.7838, lng: 39.2413 },
-  { name: "Masaki, Dar es Salaam", lat: -6.7469, lng: 39.2823 },
-  { name: "Mbezi Beach, Dar es Salaam", lat: -6.7127, lng: 39.2192 },
-  { name: "City Centre, Dar es Salaam", lat: -6.8161, lng: 39.2887 }
+  { name: "Customer in Fuoni, Zanzibar", lat: -6.183, lng: 39.250 },
+  { name: "Customer in Bububu, Zanzibar", lat: -6.100, lng: 39.217 },
+  { name: "Customer in Mombasa, Zanzibar", lat: -6.176, lng: 39.246 },
+  { name: "Customer in Zanzibar City / Stone Town", lat: -6.163, lng: 39.189 }
 ];
 
 const paymentMethods = [
-  { id: "mpesa", name: "M-Pesa", icon: WalletCards },
-  { id: "card", name: "Card / Bank", icon: CreditCard },
-  { id: "cash", name: "Cash on Delivery", icon: Banknote }
+  { id: "mpesa", name: "M-Pesa", icon: WalletCards, prompt: "Enter customer phone and M-Pesa transaction code." },
+  { id: "tigopesa", name: "Tigo Pesa", icon: WalletCards, prompt: "Enter customer phone and Tigo Pesa transaction code." },
+  { id: "card", name: "Card", icon: CreditCard, prompt: "Enter the card payment authorization reference." },
+  { id: "cash", name: "Cash on Delivery", icon: Banknote, prompt: "Reserve the order. Rider collects cash on delivery." }
 ];
 
-const orderStages = ["Confirmed", "Preparing", "On the way", "Delivered"];
+const orderStages = ["At store", "Picked up", "On the way", "Near customer", "Delivered"];
 const CONTACT_PHONE = "+255777305695";
 const CONTACT_DISPLAY = "255 777 305 695";
 
 const customerSteps = [
+  { title: "Call Details", icon: Phone },
   { title: "Gas Type", icon: PackageCheck },
   { title: "Size & Qty", icon: Plus },
   { title: "Location", icon: MapPin },
@@ -91,22 +92,22 @@ const customerSteps = [
 ];
 
 const dashboardOrders = [
-  { id: "GF-1027", customer: "Amina Juma", product: "13kg LPG x1", status: "New", payment: "M-Pesa", eta: "24 min" },
-  { id: "GF-1026", customer: "Bright Foods", product: "Bulk Gas x1", status: "Preparing", payment: "Card", eta: "52 min" },
-  { id: "GF-1025", customer: "Daniel M.", product: "6kg LPG x2", status: "On the way", payment: "Cash", eta: "11 min" }
+  { id: "FG-1027", customer: "Amina Juma", product: "15kg LPG x1", status: "New", payment: "M-Pesa", eta: "24 min" },
+  { id: "FG-1026", customer: "Bububu Cafe", product: "38kg LPG x1", status: "Preparing", payment: "Tigo Pesa", eta: "36 min" },
+  { id: "FG-1025", customer: "Salim M.", product: "6kg LPG x2", status: "On the way", payment: "Cash", eta: "11 min" }
 ];
 
 const stockRows = [
   { label: "6kg LPG", value: 64, level: 86 },
-  { label: "13kg LPG", value: 31, level: 54 },
-  { label: "22kg LPG", value: 12, level: 32 },
-  { label: "Bulk tanks", value: 7, level: 58 }
+  { label: "15kg LPG", value: 31, level: 54 },
+  { label: "38kg LPG", value: 12, level: 32 },
+  { label: "Regulators", value: 18, level: 58 }
 ];
 
 const processRows = [
-  { label: "Customer App", items: ["Browse gas", "Order", "Track", "Rate"], icon: UsersRound },
-  { label: "Depot Dashboard", items: ["Receive orders", "Manage stock", "Assign riders", "View revenue"], icon: Store },
-  { label: "Admin Control Panel", items: ["Onboard depots", "Monitor orders", "Analytics", "Promotions"], icon: ShieldCheck }
+  { label: "Phone Order", items: ["Receive call", "Record customer", "Select gas", "Track route"], icon: UsersRound },
+  { label: "Store Dashboard", items: ["Receive orders", "Manage stock", "Assign riders", "View revenue"], icon: Store },
+  { label: "Admin Control Panel", items: ["Manage store", "Monitor orders", "Analytics", "Promotions"], icon: ShieldCheck }
 ];
 
 const featureChecks = [
@@ -124,35 +125,47 @@ function money(value) {
   return `TZS ${value.toLocaleString("en-US")}`;
 }
 
-function riderPoint(progress) {
-  const route = [
-    { x: 78, y: 18 },
-    { x: 66, y: 34 },
-    { x: 51, y: 47 },
-    { x: 36, y: 61 },
-    { x: 18, y: 78 }
-  ];
-  const value = Math.max(0, Math.min(100, progress));
-  const segmentSize = 100 / (route.length - 1);
-  const segment = Math.min(route.length - 2, Math.floor(value / segmentSize));
-  const segmentProgress = (value - segment * segmentSize) / segmentSize;
-  const start = route[segment];
-  const end = route[segment + 1];
-
-  return {
-    x: start.x + (end.x - start.x) * segmentProgress,
-    y: start.y + (end.y - start.y) * segmentProgress
-  };
+function arrivalTime(minutes, now) {
+  if (minutes === null) return "--";
+  return new Intl.DateTimeFormat("en-TZ", {
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(new Date(now.getTime() + minutes * 60000));
 }
 
-function mapEmbedUrl(depot, destination) {
+function mapViewport(depot, destination) {
   const margin = 0.018;
   const minLng = Math.min(depot.lng, destination.lng) - margin;
   const minLat = Math.min(depot.lat, destination.lat) - margin;
   const maxLng = Math.max(depot.lng, destination.lng) + margin;
   const maxLat = Math.max(depot.lat, destination.lat) + margin;
 
-  return `https://www.openstreetmap.org/export/embed.html?bbox=${minLng}%2C${minLat}%2C${maxLng}%2C${maxLat}&layer=mapnik&marker=${destination.lat}%2C${destination.lng}`;
+  function point(location) {
+    const x = ((location.lng - minLng) / (maxLng - minLng)) * 100;
+    const y = (1 - (location.lat - minLat) / (maxLat - minLat)) * 100;
+
+    return {
+      left: `${x}%`,
+      top: `${y}%`,
+      x,
+      y
+    };
+  }
+
+  const depotPoint = point(depot);
+  const destinationPoint = point(destination);
+
+  return {
+    embedUrl: `https://www.openstreetmap.org/export/embed.html?bbox=${minLng}%2C${minLat}%2C${maxLng}%2C${maxLat}&layer=mapnik&marker=${destination.lat}%2C${destination.lng}`,
+    depotPoint,
+    destinationPoint,
+    routeLine: {
+      x1: depotPoint.x,
+      y1: depotPoint.y,
+      x2: destinationPoint.x,
+      y2: destinationPoint.y
+    }
+  };
 }
 
 function googleDirectionsUrl(depot, destination) {
@@ -167,51 +180,73 @@ function App() {
   const [activeView, setActiveView] = useState("customer");
   const [step, setStep] = useState(0);
   const [gasType, setGasType] = useState(gasTypes[0]);
-  const [size, setSize] = useState("13kg");
+  const [size, setSize] = useState("15kg");
   const [quantity, setQuantity] = useState(1);
+  const [callerName, setCallerName] = useState("");
+  const [callerPhone, setCallerPhone] = useState("");
+  const [callerNotes, setCallerNotes] = useState("");
   const [depot, setDepot] = useState(depots[0]);
   const [payment, setPayment] = useState(paymentMethods[0]);
   const [paymentStatus, setPaymentStatus] = useState("pending");
   const [paymentReference, setPaymentReference] = useState("");
+  const [paymentPhone, setPaymentPhone] = useState("");
+  const [paymentProof, setPaymentProof] = useState("");
+  const [paymentError, setPaymentError] = useState("");
   const [deliveryLocation, setDeliveryLocation] = useState(deliveryLocations[0]);
   const [trackingStage, setTrackingStage] = useState(0);
-  const [liveTracking, setLiveTracking] = useState(false);
-  const [riderProgress, setRiderProgress] = useState(0);
+  const [now, setNow] = useState(() => new Date());
 
   const total = useMemo(() => gasType.price * quantity, [gasType, quantity]);
-  const mapUrl = useMemo(() => mapEmbedUrl(depot, deliveryLocation), [depot, deliveryLocation]);
+  const mapView = useMemo(() => mapViewport(depot, deliveryLocation), [depot, deliveryLocation]);
   const googleUrl = useMemo(() => googleDirectionsUrl(depot, deliveryLocation), [depot, deliveryLocation]);
   const osmUrl = useMemo(() => osmDirectionsUrl(depot, deliveryLocation), [depot, deliveryLocation]);
+  const currentOrder = useMemo(() => ({
+    id: paymentReference || "NEW-ORDER",
+    customer: callerName.trim() || "Phone customer",
+    phone: callerPhone.trim() || "No phone recorded",
+    notes: callerNotes.trim() || "No call notes",
+    product: `${size} ${gasType.name} x${quantity}`,
+    status: paymentStatus === "paid" ? "Paid - ready to dispatch" : paymentStatus === "reserved" ? "Cash reserved" : "Draft order",
+    payment: payment.name,
+    total,
+    destination: deliveryLocation.name,
+    store: depot.name,
+    eta: `${depot.eta} min`,
+    reference: paymentReference || "Not confirmed"
+  }), [callerName, callerNotes, callerPhone, depot, deliveryLocation, gasType, payment, paymentReference, paymentStatus, quantity, size, total]);
   const trackingCopy = useMemo(() => {
-    const remaining = Math.max(1, Math.ceil(depot.eta * (100 - riderProgress) / 100));
-    if (riderProgress >= 98) return { label: "Delivered at customer", eta: "0 min", detail: "Receipt ready" };
-    if (riderProgress >= 82) return { label: "Arriving at customer", eta: "1 min", detail: "Rider is on the final street" };
-    if (riderProgress >= 55) return { label: "On the way", eta: `${remaining} min`, detail: "Rider is following the selected route" };
-    if (riderProgress >= 18) return { label: "Leaving depot", eta: `${remaining} min`, detail: "Cylinder picked and rider dispatched" };
-    return { label: "Preparing order", eta: `${depot.eta} min`, detail: "Depot is confirming stock and rider" };
-  }, [depot.eta, riderProgress]);
-  const mapRiderPoint = useMemo(() => riderPoint(riderProgress), [riderProgress]);
+    if (paymentStatus === "pending") {
+      return {
+        label: "Payment needed",
+        eta: "--",
+        etaMinutes: null,
+        arrival: "--",
+        progress: 0,
+        position: "Waiting for payment or cash reservation",
+        detail: "Record payment before dispatching this order"
+      };
+    }
+
+    const stageData = [
+      { label: "Rider at store", eta: depot.eta, progress: 8, position: depot.name, detail: "Cylinder is ready at the selected gas store" },
+      { label: "Picked up from store", eta: Math.max(1, depot.eta - 3), progress: 25, position: "Leaving store area", detail: "Rider has collected the cylinder" },
+      { label: "On the way", eta: Math.max(1, Math.ceil(depot.eta * 0.55)), progress: 58, position: "On route to customer", detail: "The rider route from store to customer is visible on the map" },
+      { label: "Near customer", eta: 3, progress: 86, position: deliveryLocation.name, detail: "Rider is close to the customer location" },
+      { label: "Delivered", eta: 0, progress: 100, position: deliveryLocation.name, detail: "Delivery completed and receipt ready" }
+    ];
+    const current = stageData[Math.min(trackingStage, stageData.length - 1)];
+    return {
+      ...current,
+      eta: current.eta === 0 ? "0 min" : `${current.eta} min`,
+      etaMinutes: current.eta,
+      arrival: current.eta === 0 ? "Delivered" : arrivalTime(current.eta, now)
+    };
+  }, [deliveryLocation.name, depot, now, paymentStatus, trackingStage]);
 
   useEffect(() => {
-    if (!liveTracking) return undefined;
-
-    const timer = window.setInterval(() => {
-      setRiderProgress((current) => {
-        const next = Math.min(100, current + 2);
-        if (next >= 100) {
-          setLiveTracking(false);
-          setTrackingStage(3);
-        } else if (next >= 18) {
-          setTrackingStage(2);
-        } else {
-          setTrackingStage(1);
-        }
-        return next;
-      });
-    }, 1000);
-
+    const timer = window.setInterval(() => setNow(new Date()), 30000);
     return () => window.clearInterval(timer);
-  }, [liveTracking]);
+  }, []);
 
   function updateGasType(item) {
     setGasType(item);
@@ -220,43 +255,54 @@ function App() {
 
   function updateDepot(item) {
     setDepot(item);
-    setRiderProgress(0);
     setTrackingStage(0);
-    setLiveTracking(false);
   }
 
   function updatePayment(item) {
     setPayment(item);
     setPaymentStatus("pending");
     setPaymentReference("");
+    setPaymentPhone("");
+    setPaymentProof("");
+    setPaymentError("");
+    setTrackingStage(0);
   }
 
   function confirmPayment() {
+    const recordedPhone = paymentPhone.trim() || callerPhone.trim();
+    const phoneOk = /^\+?255\d{9}$|^0\d{9}$/.test(recordedPhone);
+    const needsPhone = payment.id === "mpesa" || payment.id === "tigopesa";
+    const needsReference = payment.id !== "cash";
+
+    if (needsPhone && !phoneOk) {
+      setPaymentError("Enter a valid Tanzania phone number, for example +255777305695 or 0777305695.");
+      return;
+    }
+
+    if (needsReference && paymentProof.trim().length < 5) {
+      setPaymentError(payment.id === "card" ? "Enter the card authorization reference." : "Enter the mobile money transaction reference from the payment message.");
+      return;
+    }
+
     const prefix = payment.id === "cash" ? "COD" : payment.id.toUpperCase();
-    setPaymentReference(`${prefix}-${Math.floor(100000 + Math.random() * 899999)}`);
+    setPaymentReference(payment.id === "cash" ? `${prefix}-${Date.now().toString().slice(-6)}` : paymentProof.trim().toUpperCase());
     setPaymentStatus(payment.id === "cash" ? "reserved" : "paid");
+    setPaymentError("");
     setTrackingStage(0);
-    setRiderProgress(0);
   }
 
   return (
     <main className="app-shell">
       <header className="topbar">
         <div>
-          <p className="eyebrow">GasFlow process console</p>
-          <h1>Smart gas ordering, fulfilment, and control</h1>
-        </div>
-        <div className="status-strip" aria-label="Platform status">
-          <span><BadgeCheck size={16} /> MVP flow ready</span>
-          <span><Clock3 size={16} /> 6-step order</span>
-          <a href={`tel:${CONTACT_PHONE}`}><Phone size={16} /> {CONTACT_DISPLAY}</a>
+          <h1>Gas supply in Zanzibar</h1>
         </div>
       </header>
 
       <nav className="view-tabs" aria-label="Process views">
         {[
-          ["customer", "Customer App"],
-          ["depot", "Depot Dashboard"],
+          ["customer", "Phone Order"],
+          ["depot", "Store Dashboard"],
           ["admin", "Admin Panel"],
           ["process", "Process Check"]
         ].map(([id, label]) => (
@@ -274,8 +320,8 @@ function App() {
         <section className="workspace two-column">
           <div className="panel process-panel">
             <div className="section-heading">
-              <p className="eyebrow">Customer app</p>
-              <h2>Order in six checks</h2>
+              <p className="eyebrow">Manager phone order</p>
+              <h2>Receive call, place order, track route</h2>
             </div>
             <div className="stepper" aria-label="Customer ordering steps">
               {customerSteps.map((item, index) => {
@@ -287,7 +333,7 @@ function App() {
                     onClick={() => setStep(index)}
                   >
                     <span><Icon size={17} /></span>
-                    <strong>{index + 1}. {item.title}</strong>
+                    <strong>{item.title}</strong>
                   </button>
                 );
               })}
@@ -297,32 +343,40 @@ function App() {
               gasType={gasType}
               size={size}
               quantity={quantity}
+              callerName={callerName}
+              callerPhone={callerPhone}
+              callerNotes={callerNotes}
               depot={depot}
               payment={payment}
               paymentStatus={paymentStatus}
               paymentReference={paymentReference}
+              paymentPhone={paymentPhone}
+              paymentProof={paymentProof}
+              paymentError={paymentError}
               deliveryLocation={deliveryLocation}
               deliveryLocations={deliveryLocations}
-              mapUrl={mapUrl}
+              mapView={mapView}
               googleUrl={googleUrl}
               osmUrl={osmUrl}
               trackingStage={trackingStage}
-              liveTracking={liveTracking}
-              riderProgress={riderProgress}
               trackingCopy={trackingCopy}
+              now={now}
               contactPhone={CONTACT_PHONE}
               contactDisplay={CONTACT_DISPLAY}
               total={total}
               onGasType={updateGasType}
               onSize={setSize}
               onQuantity={setQuantity}
+              onCallerName={setCallerName}
+              onCallerPhone={setCallerPhone}
+              onCallerNotes={setCallerNotes}
               onDepot={updateDepot}
               onPayment={updatePayment}
               onPaymentConfirm={confirmPayment}
+              onPaymentPhone={setPaymentPhone}
+              onPaymentProof={setPaymentProof}
               onDeliveryLocation={setDeliveryLocation}
               onTrackingStage={setTrackingStage}
-              onLiveTracking={setLiveTracking}
-              onRiderProgress={setRiderProgress}
             />
             <div className="step-actions">
               <button className="icon-button" onClick={() => setStep(Math.max(0, step - 1))} aria-label="Previous step">
@@ -337,30 +391,21 @@ function App() {
           <aside className="panel summary-panel">
             <p className="eyebrow">Live order preview</p>
             <h2>{gasType.name}</h2>
-            <div className="summary-map real-map">
-              <iframe
-                title="GasFlow live delivery map"
-                src={mapUrl}
-                loading="lazy"
-              />
-              <div className="map-meta">
-                <strong>{trackingCopy.label}</strong>
-                <span>{depot.name} to {deliveryLocation.name}</span>
-              </div>
-            </div>
-            <div className="map-actions">
-              <a className="contact-link" href={googleUrl} target="_blank" rel="noreferrer">
-                <Navigation size={16} /> Google directions
-              </a>
-              <a className="contact-link" href={osmUrl} target="_blank" rel="noreferrer">
-                <Route size={16} /> OpenStreetMap
-              </a>
-            </div>
+            <ExactMap
+              className="summary-map"
+              title="Zanzibar LPG store delivery map"
+              mapView={mapView}
+              depot={depot}
+              destination={deliveryLocation}
+              metaTitle={trackingCopy.label}
+            />
             <dl className="order-summary">
               <div><dt>Size</dt><dd>{size}</dd></div>
               <div><dt>Quantity</dt><dd>{quantity}</dd></div>
-              <div><dt>Depot</dt><dd>{depot.name}</dd></div>
-              <div><dt>Direction</dt><dd>{depot.distance} - {trackingCopy.eta}</dd></div>
+              <div><dt>Customer</dt><dd>{callerName || "Not recorded"}</dd></div>
+              <div><dt>Phone</dt><dd>{callerPhone || "Not recorded"}</dd></div>
+              <div><dt>Store</dt><dd>{depot.name}</dd></div>
+              <div><dt>Direction</dt><dd>{trackingCopy.eta}</dd></div>
               <div><dt>Payment</dt><dd>{payment.name}</dd></div>
               <div><dt>Status</dt><dd>{paymentStatus === "paid" ? "Paid" : paymentStatus === "reserved" ? "Cash reserved" : "Not paid"}</dd></div>
               <div><dt>Contact</dt><dd>{CONTACT_DISPLAY}</dd></div>
@@ -370,9 +415,16 @@ function App() {
         </section>
       )}
 
-      {activeView === "depot" && <DepotDashboard />}
-      {activeView === "admin" && <AdminPanel />}
-      {activeView === "process" && <ProcessCheck />}
+      {activeView === "depot" && <DepotDashboard currentOrder={currentOrder} />}
+      {activeView === "admin" && (
+        <AdminPanel
+          currentOrder={currentOrder}
+          mapView={mapView}
+          depot={depot}
+          destination={deliveryLocation}
+        />
+      )}
+      {activeView === "process" && <ProcessCheck currentOrder={currentOrder} />}
     </main>
   );
 }
@@ -383,35 +435,74 @@ function CustomerStep(props) {
     gasType,
     size,
     quantity,
+    callerName,
+    callerPhone,
+    callerNotes,
     depot,
     payment,
     paymentStatus,
     paymentReference,
+    paymentPhone,
+    paymentProof,
+    paymentError,
     deliveryLocation,
     deliveryLocations,
-    mapUrl,
+    mapView,
     googleUrl,
     osmUrl,
     trackingStage,
-    liveTracking,
-    riderProgress,
     trackingCopy,
+    now,
     contactPhone,
     contactDisplay,
     total,
     onGasType,
     onSize,
     onQuantity,
+    onCallerName,
+    onCallerPhone,
+    onCallerNotes,
     onDepot,
     onPayment,
     onPaymentConfirm,
+    onPaymentPhone,
+    onPaymentProof,
     onDeliveryLocation,
-    onTrackingStage,
-    onLiveTracking,
-    onRiderProgress
+    onTrackingStage
   } = props;
 
   if (step === 0) {
+    return (
+      <div className="call-form">
+        <label className="field-label">
+          Customer name
+          <input
+            value={callerName}
+            onChange={(event) => onCallerName(event.target.value)}
+            placeholder="Example: Amina Juma"
+          />
+        </label>
+        <label className="field-label">
+          Customer phone
+          <input
+            value={callerPhone}
+            onChange={(event) => onCallerPhone(event.target.value)}
+            placeholder="+255777305695"
+          />
+        </label>
+        <label className="field-label full-span">
+          Call notes
+          <input
+            value={callerNotes}
+            onChange={(event) => onCallerNotes(event.target.value)}
+            placeholder="Example: needs 15kg cylinder today, pay by M-Pesa"
+          />
+        </label>
+      </div>
+    );
+  }
+
+  if (step === 1) {
     return (
       <div className="choice-grid">
         {gasTypes.map((item) => (
@@ -425,7 +516,7 @@ function CustomerStep(props) {
     );
   }
 
-  if (step === 1) {
+  if (step === 2) {
     return (
       <div className="flow-content">
         <div className="size-row">
@@ -445,7 +536,7 @@ function CustomerStep(props) {
     );
   }
 
-  if (step === 2) {
+  if (step === 3) {
     return (
       <div className="location-flow">
         <label className="field-label">
@@ -456,14 +547,22 @@ function CustomerStep(props) {
             ))}
           </select>
         </label>
-        <div className="summary-map real-map inline-map">
-          <iframe title="Selected delivery map" src={mapUrl} loading="lazy" />
+        <ExactMap
+          className="summary-map inline-map"
+          title="Selected delivery map"
+          mapView={mapView}
+          depot={depot}
+          destination={deliveryLocation}
+          metaTitle="Selected delivery route"
+        />
+        <div className="field-label">
+          Gas store
         </div>
         <div className="depot-list">
           {depots.map((item) => (
             <button className={`depot-row ${depot.name === item.name ? "selected" : ""}`} key={item.name} onClick={() => onDepot(item)}>
               <span className="depot-marker"><Navigation size={18} /></span>
-              <span><strong>{item.name}</strong><small>{item.distance} away - {item.status} - ETA {item.eta} min</small></span>
+              <span><strong>{item.name}</strong><small>{item.status} - ETA {item.eta} min - {item.route}</small></span>
               <b>{item.stock} left</b>
             </button>
           ))}
@@ -471,16 +570,15 @@ function CustomerStep(props) {
         <div className="route-card">
           <Route size={21} />
           <span>
-            <strong>Exact map direction</strong>
-            <small>{depot.name} to {deliveryLocation.name}</small>
+            <strong>Store to customer route</strong>
+            <small>The route from {depot.name} to {deliveryLocation.name} is shown on the map above.</small>
           </span>
-          <a className="contact-link compact" href={googleUrl} target="_blank" rel="noreferrer">Open</a>
         </div>
       </div>
     );
   }
 
-  if (step === 3) {
+  if (step === 4) {
     return (
       <div className="payment-flow">
         <div className="payment-grid">
@@ -490,7 +588,7 @@ function CustomerStep(props) {
               <button className={`payment-card ${payment.id === item.id ? "selected" : ""}`} key={item.id} onClick={() => onPayment(item)}>
                 <Icon size={24} />
                 <strong>{item.name}</strong>
-                <small>{item.id === "mpesa" ? "Send STK prompt" : item.id === "card" ? "Authorize card" : "Pay rider on delivery"}</small>
+                <small>{item.id === "cash" ? "Pay rider on delivery" : "Record transaction reference"}</small>
               </button>
             );
           })}
@@ -499,15 +597,44 @@ function CustomerStep(props) {
           <div>
             <p className="eyebrow">Payment terminal</p>
             <h3>{payment.name}</h3>
-            <small>{payment.id === "cash" ? `Cash order is reserved. Rider contact: ${contactDisplay}.` : "This simulates a successful payment confirmation for the demo."}</small>
+            <small>{payment.prompt}</small>
           </div>
+          {payment.id !== "cash" && (
+            <div className="payment-form">
+              {payment.id !== "card" && (
+                <label className="field-label">
+                  Customer phone
+                  <input
+                    value={paymentPhone}
+                    onChange={(event) => onPaymentPhone(event.target.value)}
+                    placeholder={callerPhone || "+255777305695"}
+                  />
+                </label>
+              )}
+              <label className="field-label">
+                {payment.id === "card" ? "Authorization reference" : "Transaction reference"}
+                <input
+                  value={paymentProof}
+                  onChange={(event) => onPaymentProof(event.target.value)}
+                  placeholder={payment.id === "card" ? "Example: AUTH-48291" : "Example: QG45T7K2"}
+                />
+              </label>
+            </div>
+          )}
+          {payment.id === "cash" && (
+            <div className="cash-note">
+              <Banknote size={20} />
+              <span>Cash will be collected by the rider on delivery. Store contact: {contactDisplay}.</span>
+            </div>
+          )}
           <div className="terminal-row">
             <span>Amount</span>
             <strong>{money(total)}</strong>
           </div>
           <button className="primary-action full-width" onClick={onPaymentConfirm}>
-            {payment.id === "cash" ? "Reserve cash order" : "Confirm payment"} <Send size={17} />
+            {payment.id === "cash" ? "Reserve cash order" : "Record received payment"} <Send size={17} />
           </button>
+          {paymentError && <div className="payment-error">{paymentError}</div>}
           {paymentStatus !== "pending" && (
             <div className="payment-success">
               <CheckCircle2 size={20} />
@@ -522,7 +649,8 @@ function CustomerStep(props) {
     );
   }
 
-  if (step === 4) {
+  if (step === 5) {
+    const trackingLocked = paymentStatus === "pending";
     return (
       <div className="tracking-card">
         <div className="rider-strip">
@@ -530,42 +658,59 @@ function CustomerStep(props) {
           <span><strong>Joseph M.</strong><small><Star size={14} fill="currentColor" /> 4.9 rider rating - {trackingCopy.label}</small></span>
           <a className="icon-button" href={`tel:${contactPhone}`} aria-label="Call rider"><Phone size={18} /></a>
         </div>
+        <ExactMap
+          className="summary-map inline-map tracking-map"
+          title="Real delivery route map"
+          mapView={mapView}
+          depot={depot}
+          destination={deliveryLocation}
+          metaTitle={trackingCopy.label}
+          routeProgress={trackingCopy.progress}
+        />
         <div className="live-route-panel">
-          <div className="live-route-track" style={{ "--rider-progress": `${riderProgress}%` }}>
-            <span style={{ left: `${riderProgress}%` }}><Truck size={17} /></span>
+          <div className="dispatch-status">
+            <div>
+              <span>Current rider position</span>
+              <strong>{trackingCopy.position}</strong>
+            </div>
+            <div>
+              <span>ETA</span>
+              <strong>{trackingCopy.eta}</strong>
+            </div>
+            <div>
+              <span>Estimated arrival</span>
+              <strong>{trackingCopy.arrival}</strong>
+            </div>
+          </div>
+          <div className="dispatch-progress" style={{ "--delivery-progress": `${trackingCopy.progress}%` }}>
+            <span />
           </div>
           <div className="terminal-row">
-            <span>{depot.name} to {deliveryLocation.name}</span>
+            <span>Store: {depot.name}</span>
             <strong>{trackingCopy.eta}</strong>
+          </div>
+          <div className="tracking-detail">
+            <MapPin size={18} />
+            <span>Customer location: {deliveryLocation.name}</span>
           </div>
           <div className="tracking-detail">
             <Navigation size={18} />
             <span>{trackingCopy.detail}</span>
           </div>
+          <div className="tracking-detail">
+            <Clock3 size={18} />
+            <span>Manager updated: {arrivalTime(0, now)}</span>
+          </div>
           <a className="contact-link" href={`tel:${contactPhone}`}>
             <Phone size={16} /> Call {contactDisplay}
           </a>
-          <div className="live-actions">
-            <button className="primary-action" onClick={() => onLiveTracking(!liveTracking)}>
-              {liveTracking ? "Pause live tracking" : "Start live tracking"}
-            </button>
-            <button
-              className="icon-button wide"
-              onClick={() => {
-                onRiderProgress(0);
-                onTrackingStage(0);
-                onLiveTracking(false);
-              }}
-            >
-              Reset
-            </button>
-          </div>
         </div>
         <div className="tracking-stages">
           {orderStages.map((stage, index) => (
             <button
               className={index <= trackingStage ? "stage active" : "stage"}
               key={stage}
+              disabled={trackingLocked}
               onClick={() => onTrackingStage(index)}
             >
               <span />
@@ -573,6 +718,11 @@ function CustomerStep(props) {
             </button>
           ))}
         </div>
+        {trackingLocked && (
+          <div className="payment-error">
+            Record mobile money payment or reserve cash order before dispatch tracking.
+          </div>
+        )}
       </div>
     );
   }
@@ -581,7 +731,7 @@ function CustomerStep(props) {
     <div className="delivered-panel">
       <ReceiptText size={34} />
       <h3>Delivery confirmed</h3>
-      <p>Digital receipt saved to order history. Customer can rate depot and rider, then reorder in one tap.</p>
+      <p>Digital receipt saved to order history. Customer can rate the store and rider, then reorder in one tap.</p>
       <div className="rating-row">
         {[1, 2, 3, 4, 5].map((item) => <Star key={item} size={22} fill="currentColor" />)}
       </div>
@@ -589,13 +739,60 @@ function CustomerStep(props) {
   );
 }
 
-function DepotDashboard() {
+function ExactMap({ className, title, mapView, depot, destination, metaTitle, routeProgress = null }) {
+  const riderPoint = routeProgress === null ? null : {
+    left: `${mapView.routeLine.x1 + ((mapView.routeLine.x2 - mapView.routeLine.x1) * routeProgress) / 100}%`,
+    top: `${mapView.routeLine.y1 + ((mapView.routeLine.y2 - mapView.routeLine.y1) * routeProgress) / 100}%`
+  };
+
+  return (
+    <div className={`${className} real-map`}>
+      <iframe title={title} src={mapView.embedUrl} loading="lazy" />
+      <svg className="route-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+        <line
+          x1={mapView.routeLine.x1}
+          y1={mapView.routeLine.y1}
+          x2={mapView.routeLine.x2}
+          y2={mapView.routeLine.y2}
+        />
+      </svg>
+      <span className="exact-map-pin depot-pin" style={mapView.depotPoint}>
+        Store
+      </span>
+      <span className="exact-map-pin customer-pin" style={mapView.destinationPoint}>
+        Customer
+      </span>
+      {riderPoint && (
+        <span className="rider-map-pin" style={riderPoint}>
+          <Truck size={15} />
+        </span>
+      )}
+      <div className="map-meta">
+        <strong>{metaTitle}</strong>
+        <span>Store: {depot.name}</span>
+        <span>Customer location: {destination.name}</span>
+      </div>
+    </div>
+  );
+}
+
+function DepotDashboard({ currentOrder }) {
   return (
     <section className="workspace depot-grid">
       <div className="panel">
         <div className="section-heading">
-          <p className="eyebrow">Supplier dashboard</p>
+          <p className="eyebrow">Zanzibar LPG Stores</p>
           <h2>Orders arriving now</h2>
+        </div>
+        <div className="active-order">
+          <span>
+            <strong>{currentOrder.id}</strong>
+            <small>{currentOrder.customer} - {currentOrder.phone}</small>
+          </span>
+          <span>{currentOrder.product}</span>
+          <span>{currentOrder.destination}</span>
+          <span className="pill">{currentOrder.status}</span>
+          <b>{money(currentOrder.total)}</b>
         </div>
         <div className="order-table">
           {dashboardOrders.map((order) => (
@@ -624,34 +821,48 @@ function DepotDashboard() {
         </div>
       </div>
       <div className="panel metric-band">
-        <Metric icon={CircleDollarSign} label="Daily revenue" value="TZS 4.82M" />
-        <Metric icon={Bike} label="Active riders" value="12" />
-        <Metric icon={ClipboardCheck} label="Completed" value="138" />
+        <Metric icon={CircleDollarSign} label="Daily revenue" value="TZS 1.24M" />
+        <Metric icon={Bike} label="Active riders" value="4" />
+        <Metric icon={ClipboardCheck} label="Completed" value="38" />
       </div>
     </section>
   );
 }
 
-function AdminPanel() {
+function AdminPanel({ currentOrder, mapView, depot, destination }) {
   return (
     <section className="workspace admin-layout">
       <div className="panel analytics-panel">
         <div className="section-heading">
           <p className="eyebrow">Admin control panel</p>
-          <h2>Company-wide oversight</h2>
+          <h2>Store oversight</h2>
         </div>
-        <div className="analytics-chart" aria-label="Weekly order volume chart">
-          {[46, 68, 54, 82, 76, 94, 88].map((height, index) => (
-            <span key={index} style={{ height: `${height}%` }} />
-          ))}
-        </div>
+        <ExactMap
+          className="summary-map admin-map"
+          title="Admin service area map"
+          mapView={mapView}
+          depot={depot}
+          destination={destination}
+          metaTitle="Active Zanzibar delivery route"
+        />
+        <dl className="order-summary admin-summary">
+          <div><dt>Customer</dt><dd>{currentOrder.customer}</dd></div>
+          <div><dt>Phone</dt><dd>{currentOrder.phone}</dd></div>
+          <div><dt>Store</dt><dd>{currentOrder.store}</dd></div>
+          <div><dt>Destination</dt><dd>{currentOrder.destination}</dd></div>
+          <div><dt>Order</dt><dd>{currentOrder.product}</dd></div>
+          <div><dt>Payment</dt><dd>{currentOrder.payment}</dd></div>
+          <div><dt>Status</dt><dd>{currentOrder.status}</dd></div>
+          <div><dt>Reference</dt><dd>{currentOrder.reference}</dd></div>
+          <div><dt>Call notes</dt><dd>{currentOrder.notes}</dd></div>
+        </dl>
       </div>
       <div className="panel admin-actions">
         {[
-          [Store, "Onboard depots", "Verify documents and activate service zones."],
+          [Store, "Manage store", "Update stock and service zones."],
           [Truck, "Manage riders", "Track accountability, ratings, and delivery time."],
           [Megaphone, "Promotions", "Push discounts, loyalty points, and campaigns."],
-          [ChartNoAxesCombined, "Reports", "Review revenue, stock, and depot performance."]
+          [ChartNoAxesCombined, "Reports", "Review revenue, stock, and store performance."]
         ].map(([Icon, title, copy]) => (
           <div className="admin-action" key={title}>
             <Icon size={22} />
@@ -663,7 +874,7 @@ function AdminPanel() {
   );
 }
 
-function ProcessCheck() {
+function ProcessCheck({ currentOrder }) {
   return (
     <section className="workspace process-check">
       <div className="panel">
@@ -687,6 +898,20 @@ function ProcessCheck() {
             );
           })}
         </div>
+      </div>
+      <div className="panel">
+        <div className="section-heading">
+          <p className="eyebrow">Current order status</p>
+          <h2>{currentOrder.status}</h2>
+        </div>
+        <dl className="order-summary">
+          <div><dt>Customer</dt><dd>{currentOrder.customer}</dd></div>
+          <div><dt>Phone</dt><dd>{currentOrder.phone}</dd></div>
+          <div><dt>Product</dt><dd>{currentOrder.product}</dd></div>
+          <div><dt>Destination</dt><dd>{currentOrder.destination}</dd></div>
+          <div><dt>ETA</dt><dd>{currentOrder.eta}</dd></div>
+          <div><dt>Total</dt><dd>{money(currentOrder.total)}</dd></div>
+        </dl>
       </div>
       <div className="panel">
         <div className="section-heading">
