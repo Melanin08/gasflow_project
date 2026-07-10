@@ -12,7 +12,10 @@ import {
   ClipboardCheck,
   Clock3,
   CreditCard,
+  KeyRound,
   Languages,
+  LogOut,
+  Mail,
   MapPin,
   Megaphone,
   Navigation,
@@ -28,6 +31,7 @@ import {
   Star,
   Store,
   Truck,
+  UserPlus,
   UsersRound,
   WalletCards
 } from "lucide-react";
@@ -77,15 +81,17 @@ const paymentMethods = [
   { id: "cash", name: "Cash on Delivery", icon: Banknote, prompt: "Reserve the order. Rider collects cash on delivery." }
 ];
 
-const orderStages = ["At store", "Picked up", "On the way", "Near customer", "Delivered"];
+const orderStages = ["At store", "Picked up", "On the way", "Near delivery", "Delivered"];
 const CONTACT_PHONE = "+255777305695";
 const CONTACT_DISPLAY = "255 777 305 695";
+const USERS_KEY = "gasflow-users";
+const SESSION_KEY = "gasflow-session";
 
 const customerSteps = [
   { title: "Call Details", icon: Phone },
   { title: "Gas Type", icon: PackageCheck },
   { title: "Size & Qty", icon: Plus },
-  { title: "Location", icon: MapPin },
+  { title: "Delivered To", icon: MapPin },
   { title: "Payment", icon: CircleDollarSign },
   { title: "Live Tracking", icon: Truck },
   { title: "Delivered", icon: ReceiptText }
@@ -176,7 +182,26 @@ function osmDirectionsUrl(depot, destination) {
   return `https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=${depot.lat}%2C${depot.lng}%3B${destination.lat}%2C${destination.lng}`;
 }
 
+function readStoredUsers() {
+  try {
+    return JSON.parse(window.localStorage.getItem(USERS_KEY) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function writeStoredUsers(users) {
+  window.localStorage.setItem(USERS_KEY, JSON.stringify(users));
+}
+
 function App() {
+  const [authUser, setAuthUser] = useState(() => {
+    try {
+      return JSON.parse(window.sessionStorage.getItem(SESSION_KEY) || "null");
+    } catch {
+      return null;
+    }
+  });
   const [activeView, setActiveView] = useState("customer");
   const [step, setStep] = useState(0);
   const [gasType, setGasType] = useState(gasTypes[0]);
@@ -193,13 +218,19 @@ function App() {
   const [paymentProof, setPaymentProof] = useState("");
   const [paymentError, setPaymentError] = useState("");
   const [deliveryLocation, setDeliveryLocation] = useState(deliveryLocations[0]);
+  const [deliveredTo, setDeliveredTo] = useState("");
   const [trackingStage, setTrackingStage] = useState(0);
   const [now, setNow] = useState(() => new Date());
 
   const total = useMemo(() => gasType.price * quantity, [gasType, quantity]);
+  const destinationName = deliveredTo.trim() || deliveryLocation.name;
+  const destination = useMemo(() => ({
+    ...deliveryLocation,
+    name: destinationName
+  }), [deliveryLocation, destinationName]);
   const mapView = useMemo(() => mapViewport(depot, deliveryLocation), [depot, deliveryLocation]);
-  const googleUrl = useMemo(() => googleDirectionsUrl(depot, deliveryLocation), [depot, deliveryLocation]);
-  const osmUrl = useMemo(() => osmDirectionsUrl(depot, deliveryLocation), [depot, deliveryLocation]);
+  const googleUrl = useMemo(() => googleDirectionsUrl(depot, destination), [depot, destination]);
+  const osmUrl = useMemo(() => osmDirectionsUrl(depot, destination), [depot, destination]);
   const currentOrder = useMemo(() => ({
     id: paymentReference || "NEW-ORDER",
     customer: callerName.trim() || "Phone customer",
@@ -209,11 +240,11 @@ function App() {
     status: paymentStatus === "paid" ? "Paid - ready to dispatch" : paymentStatus === "reserved" ? "Cash reserved" : "Draft order",
     payment: payment.name,
     total,
-    destination: deliveryLocation.name,
+    destination: destination.name,
     store: depot.name,
     eta: `${depot.eta} min`,
     reference: paymentReference || "Not confirmed"
-  }), [callerName, callerNotes, callerPhone, depot, deliveryLocation, gasType, payment, paymentReference, paymentStatus, quantity, size, total]);
+  }), [callerName, callerNotes, callerPhone, depot, destination.name, gasType, payment, paymentReference, paymentStatus, quantity, size, total]);
   const trackingCopy = useMemo(() => {
     if (paymentStatus === "pending") {
       return {
@@ -230,9 +261,9 @@ function App() {
     const stageData = [
       { label: "Rider at store", eta: depot.eta, progress: 8, position: depot.name, detail: "Cylinder is ready at the selected gas store" },
       { label: "Picked up from store", eta: Math.max(1, depot.eta - 3), progress: 25, position: "Leaving store area", detail: "Rider has collected the cylinder" },
-      { label: "On the way", eta: Math.max(1, Math.ceil(depot.eta * 0.55)), progress: 58, position: "On route to customer", detail: "The rider route from store to customer is visible on the map" },
-      { label: "Near customer", eta: 3, progress: 86, position: deliveryLocation.name, detail: "Rider is close to the customer location" },
-      { label: "Delivered", eta: 0, progress: 100, position: deliveryLocation.name, detail: "Delivery completed and receipt ready" }
+      { label: "On the way", eta: Math.max(1, Math.ceil(depot.eta * 0.55)), progress: 58, position: "On route to delivery place", detail: "The rider route from store to delivery place is visible on the map" },
+      { label: "Near delivery place", eta: 3, progress: 86, position: destination.name, detail: "Rider is close to the delivery location" },
+      { label: "Delivered", eta: 0, progress: 100, position: destination.name, detail: "Delivery completed and receipt ready" }
     ];
     const current = stageData[Math.min(trackingStage, stageData.length - 1)];
     return {
@@ -241,12 +272,24 @@ function App() {
       etaMinutes: current.eta,
       arrival: current.eta === 0 ? "Delivered" : arrivalTime(current.eta, now)
     };
-  }, [deliveryLocation.name, depot, now, paymentStatus, trackingStage]);
+  }, [depot, destination.name, now, paymentStatus, trackingStage]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 30000);
     return () => window.clearInterval(timer);
   }, []);
+
+  function handleAuth(user) {
+    window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(user));
+    setAuthUser(user);
+  }
+
+  function handleLogout() {
+    window.sessionStorage.removeItem(SESSION_KEY);
+    setAuthUser(null);
+    setActiveView("customer");
+    setStep(0);
+  }
 
   function updateGasType(item) {
     setGasType(item);
@@ -291,12 +334,19 @@ function App() {
     setTrackingStage(0);
   }
 
+  if (!authUser) {
+    return <AuthPage onAuth={handleAuth} />;
+  }
+
   return (
     <main className="app-shell">
       <header className="topbar">
         <div>
           <h1>Gas supply in Zanzibar</h1>
         </div>
+        <button className="logout-button" onClick={handleLogout}>
+          <LogOut size={17} /> Logout
+        </button>
       </header>
 
       <nav className="view-tabs" aria-label="Process views">
@@ -321,7 +371,6 @@ function App() {
           <div className="panel process-panel">
             <div className="section-heading">
               <p className="eyebrow">Manager phone order</p>
-              <h2>Receive call, place order, track route</h2>
             </div>
             <div className="stepper" aria-label="Customer ordering steps">
               {customerSteps.map((item, index) => {
@@ -355,6 +404,8 @@ function App() {
               paymentError={paymentError}
               deliveryLocation={deliveryLocation}
               deliveryLocations={deliveryLocations}
+              deliveredTo={deliveredTo}
+              destination={destination}
               mapView={mapView}
               googleUrl={googleUrl}
               osmUrl={osmUrl}
@@ -376,6 +427,7 @@ function App() {
               onPaymentPhone={setPaymentPhone}
               onPaymentProof={setPaymentProof}
               onDeliveryLocation={setDeliveryLocation}
+              onDeliveredTo={setDeliveredTo}
               onTrackingStage={setTrackingStage}
             />
             <div className="step-actions">
@@ -396,7 +448,7 @@ function App() {
               title="Zanzibar LPG store delivery map"
               mapView={mapView}
               depot={depot}
-              destination={deliveryLocation}
+              destination={destination}
               metaTitle={trackingCopy.label}
             />
             <dl className="order-summary">
@@ -421,10 +473,171 @@ function App() {
           currentOrder={currentOrder}
           mapView={mapView}
           depot={depot}
-          destination={deliveryLocation}
+          destination={destination}
         />
       )}
       {activeView === "process" && <ProcessCheck currentOrder={currentOrder} />}
+    </main>
+  );
+}
+
+function AuthPage({ onAuth }) {
+  const [mode, setMode] = useState("login");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  function resetFeedback(nextMode) {
+    setMode(nextMode);
+    setMessage("");
+    setError("");
+    setPassword("");
+    setConfirmPassword("");
+  }
+
+  function cleanEmail() {
+    return email.trim().toLowerCase();
+  }
+
+  function submitAuth(event) {
+    event.preventDefault();
+    setMessage("");
+    setError("");
+
+    const normalizedEmail = cleanEmail();
+    const users = readStoredUsers();
+    const existingUser = users.find((user) => user.email === normalizedEmail);
+
+    if (!normalizedEmail || !password) {
+      setError("Enter email and password.");
+      return;
+    }
+
+    if (mode === "login") {
+      if (!existingUser || existingUser.password !== password) {
+        setError("Email or password is incorrect.");
+        return;
+      }
+
+      onAuth({ name: existingUser.name, email: existingUser.email });
+      return;
+    }
+
+    if (mode === "register") {
+      if (!name.trim()) {
+        setError("Enter your name.");
+        return;
+      }
+
+      if (password.length < 6) {
+        setError("Password must be at least 6 characters.");
+        return;
+      }
+
+      if (existingUser) {
+        setError("This email is already registered. Login instead.");
+        return;
+      }
+
+      const newUser = {
+        name: name.trim(),
+        email: normalizedEmail,
+        phone: phone.trim(),
+        password
+      };
+
+      writeStoredUsers([...users, newUser]);
+      onAuth({ name: newUser.name, email: newUser.email });
+      return;
+    }
+
+    if (!existingUser) {
+      setError("No account found with this email.");
+      return;
+    }
+
+    if (password.length < 6) {
+      setError("New password must be at least 6 characters.");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+
+    writeStoredUsers(users.map((user) => (
+      user.email === normalizedEmail ? { ...user, password } : user
+    )));
+    setMessage("Password reset. You can login now.");
+    setMode("login");
+    setPassword("");
+    setConfirmPassword("");
+  }
+
+  const actionLabel = mode === "login" ? "Login" : mode === "register" ? "Register" : "Reset password";
+
+  return (
+    <main className="auth-shell">
+      <section className="auth-panel">
+        <div className="auth-brand">
+          <span><Store size={24} /></span>
+          <h1>Gas supply in Zanzibar</h1>
+        </div>
+
+        <div className="auth-tabs" aria-label="Account actions">
+          <button className={mode === "login" ? "active" : ""} onClick={() => resetFeedback("login")}>Login</button>
+          <button className={mode === "register" ? "active" : ""} onClick={() => resetFeedback("register")}>Register</button>
+          <button className={mode === "forgot" ? "active" : ""} onClick={() => resetFeedback("forgot")}>Forgot password</button>
+        </div>
+
+        <form className="auth-form" onSubmit={submitAuth}>
+          {mode === "register" && (
+            <label className="field-label">
+              Full name
+              <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Example: Amina Juma" />
+            </label>
+          )}
+
+          <label className="field-label">
+            Email
+            <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@example.com" type="email" />
+          </label>
+
+          {mode === "register" && (
+            <label className="field-label">
+              Phone
+              <input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+255777305695" />
+            </label>
+          )}
+
+          <label className="field-label">
+            {mode === "forgot" ? "New password" : "Password"}
+            <input value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 6 characters" type="password" />
+          </label>
+
+          {mode === "forgot" && (
+            <label className="field-label">
+              Confirm new password
+              <input value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Repeat new password" type="password" />
+            </label>
+          )}
+
+          {error && <div className="payment-error">{error}</div>}
+          {message && <div className="payment-success"><CheckCircle2 size={20} /><span><strong>{message}</strong></span></div>}
+
+          <button className="primary-action full-width" type="submit">
+            {mode === "login" && <KeyRound size={17} />}
+            {mode === "register" && <UserPlus size={17} />}
+            {mode === "forgot" && <Mail size={17} />}
+            {actionLabel}
+          </button>
+        </form>
+      </section>
     </main>
   );
 }
@@ -447,6 +660,8 @@ function CustomerStep(props) {
     paymentError,
     deliveryLocation,
     deliveryLocations,
+    deliveredTo,
+    destination,
     mapView,
     googleUrl,
     osmUrl,
@@ -468,6 +683,7 @@ function CustomerStep(props) {
     onPaymentPhone,
     onPaymentProof,
     onDeliveryLocation,
+    onDeliveredTo,
     onTrackingStage
   } = props;
 
@@ -540,7 +756,15 @@ function CustomerStep(props) {
     return (
       <div className="location-flow">
         <label className="field-label">
-          Delivery location
+          Delivered to
+          <input
+            value={deliveredTo}
+            onChange={(event) => onDeliveredTo(event.target.value)}
+            placeholder="Example: Amina Juma, Bububu Cafe, or Stone Town shop"
+          />
+        </label>
+        <label className="field-label">
+          Delivery area
           <select value={deliveryLocation.name} onChange={(event) => onDeliveryLocation(deliveryLocations.find((item) => item.name === event.target.value) || deliveryLocations[0])}>
             {deliveryLocations.map((item) => (
               <option key={item.name} value={item.name}>{item.name}</option>
@@ -552,11 +776,11 @@ function CustomerStep(props) {
           title="Selected delivery map"
           mapView={mapView}
           depot={depot}
-          destination={deliveryLocation}
+          destination={destination}
           metaTitle="Selected delivery route"
         />
         <div className="field-label">
-          Gas store
+          Taken from gas store
         </div>
         <div className="depot-list">
           {depots.map((item) => (
@@ -570,8 +794,8 @@ function CustomerStep(props) {
         <div className="route-card">
           <Route size={21} />
           <span>
-            <strong>Store to customer route</strong>
-            <small>The route from {depot.name} to {deliveryLocation.name} is shown on the map above.</small>
+            <strong>Store to delivery route</strong>
+            <small>The route from {depot.name} to {destination.name} is shown on the map above.</small>
           </span>
         </div>
       </div>
@@ -663,7 +887,7 @@ function CustomerStep(props) {
           title="Real delivery route map"
           mapView={mapView}
           depot={depot}
-          destination={deliveryLocation}
+          destination={destination}
           metaTitle={trackingCopy.label}
           routeProgress={trackingCopy.progress}
         />
@@ -691,7 +915,7 @@ function CustomerStep(props) {
           </div>
           <div className="tracking-detail">
             <MapPin size={18} />
-            <span>Customer location: {deliveryLocation.name}</span>
+            <span>Delivery location: {destination.name}</span>
           </div>
           <div className="tracking-detail">
             <Navigation size={18} />
@@ -760,7 +984,7 @@ function ExactMap({ className, title, mapView, depot, destination, metaTitle, ro
         Store
       </span>
       <span className="exact-map-pin customer-pin" style={mapView.destinationPoint}>
-        Customer
+        Delivery
       </span>
       {riderPoint && (
         <span className="rider-map-pin" style={riderPoint}>
@@ -770,7 +994,7 @@ function ExactMap({ className, title, mapView, depot, destination, metaTitle, ro
       <div className="map-meta">
         <strong>{metaTitle}</strong>
         <span>Store: {depot.name}</span>
-        <span>Customer location: {destination.name}</span>
+        <span>Delivery location: {destination.name}</span>
       </div>
     </div>
   );

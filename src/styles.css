@@ -28,13 +28,114 @@ button {
     #fff7ed;
 }
 
+.auth-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    linear-gradient(135deg, rgba(249, 115, 22, 0.18), transparent 32%),
+    linear-gradient(315deg, rgba(251, 191, 36, 0.17), transparent 30%),
+    #fff7ed;
+}
+
+.auth-panel {
+  width: min(100%, 460px);
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  padding: 24px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 18px 48px rgba(124, 45, 18, 0.12);
+}
+
+.auth-brand {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+  text-align: center;
+}
+
+.auth-brand span {
+  display: inline-flex;
+  width: 52px;
+  height: 52px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: #ffedd5;
+  color: #c2410c;
+}
+
+.auth-brand h1 {
+  font-size: clamp(2rem, 8vw, 3.4rem);
+}
+
+.auth-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 16px;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  padding: 6px;
+  background: #fffaf4;
+}
+
+.auth-tabs button {
+  min-height: 40px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #6b4a3a;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.auth-tabs button.active {
+  background: #c2410c;
+  color: #ffffff;
+}
+
+.auth-form {
+  display: grid;
+  gap: 14px;
+}
+
 .topbar {
+  position: relative;
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
+  justify-content: center;
   gap: 20px;
   max-width: 1220px;
   margin: 0 auto 18px;
+  text-align: center;
+}
+
+.logout-button {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  padding: 0 12px;
+  background: #ffffff;
+  color: #7c2d12;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.logout-button:hover,
+.auth-tabs button:hover,
+.primary-action:hover,
+.icon-button:hover {
+  filter: brightness(0.98);
 }
 
 .eyebrow {
@@ -58,6 +159,7 @@ h1 {
   font-size: clamp(2rem, 5vw, 4.6rem);
   line-height: 0.95;
   letter-spacing: 0;
+  text-align: center;
 }
 
 h2 {
@@ -70,25 +172,15 @@ h3 {
   font-size: 1rem;
 }
 
-.status-strip {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 8px;
-  min-width: 230px;
-}
-
-.status-strip span,
-.status-strip a,
 .pill {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  border: 1px solid #c8ded2;
+  border: 1px solid #fed7aa;
   border-radius: 999px;
   padding: 8px 11px;
   background: #ffffff;
-  color: #23513b;
+  color: #9a3412;
   font-size: 0.86rem;
   font-weight: 700;
   text-decoration: none;
@@ -201,17 +293,21 @@ h3 {
 .size-chip.selected,
 .depot-row.selected,
 .payment-card.selected {
-  border-color: #2f7c51;
   border-color: #f97316;
   background: #fff3e6;
   color: #7c2d12;
 }
 
 .choice-grid,
-.payment-grid,
 .feature-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.payment-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -293,7 +389,7 @@ small {
   min-height: 42px;
   align-items: center;
   justify-content: center;
-  border: 1px solid #cfded5;
+  border: 1px solid #fed7aa;
   border-radius: 8px;
   background: #ffffff;
   color: #7c2d12;
@@ -347,7 +443,7 @@ small {
 .field-label select {
   width: 100%;
   min-height: 46px;
-  border: 1px solid #cfded5;
+  border: 1px solid #fed7aa;
   border-radius: 8px;
   padding: 0 13px;
   background: #ffffff;
@@ -633,7 +729,6 @@ button.contact-link {
 }
 
 .stage.active {
-  border-color: #2f7c51;
   border-color: #f97316;
   color: #7c2d12;
 }
