@@ -511,11 +511,14 @@ function App() {
         <section className="workspace two-column">
           <div className="panel process-panel">
             <div className="section-heading">
-              <p className="eyebrow">Manager phone order</p>
+              <div>
+                <p className="eyebrow">Fast dispatch overview</p>
+                <h2>Follow the route from gas type to delivery</h2>
+              </div>
             </div>
             <div className="delivery-briefing">
               <div className="briefing-card">
-                <p className="eyebrow">Fast dispatch overview</p>
+                <p className="eyebrow">Live dispatch summary</p>
                 <h3>Nearby stores and riders</h3>
                 <div className="briefing-stats">
                   <div>
@@ -527,7 +530,7 @@ function App() {
                     <span>Company riders</span>
                   </div>
                   <div>
-                    <strong>{availableRiders.length}</strong>
+                    <strong>{riders.filter((rider) => rider.status === "Available").length}</strong>
                     <span>Available now</span>
                   </div>
                 </div>
