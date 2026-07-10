@@ -2,9 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Banknote,
-  Bell,
   Bike,
-  ChartNoAxesCombined,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -12,12 +10,12 @@ import {
   ClipboardCheck,
   Clock3,
   CreditCard,
+  Eye,
+  EyeOff,
   KeyRound,
-  Languages,
   LogOut,
   Mail,
   MapPin,
-  Megaphone,
   Navigation,
   PackageCheck,
   Phone,
@@ -67,13 +65,6 @@ const depots = [
   { name: "Mombasa Gas Store, Zanzibar", distance: "Selected store", status: "Open", stock: 28, rating: 4.7, eta: 20, route: "Mombasa service area, Zanzibar", lat: -6.176, lng: 39.246 }
 ];
 
-const deliveryLocations = [
-  { name: "Customer in Fuoni, Zanzibar", lat: -6.183, lng: 39.250 },
-  { name: "Customer in Bububu, Zanzibar", lat: -6.100, lng: 39.217 },
-  { name: "Customer in Mombasa, Zanzibar", lat: -6.176, lng: 39.246 },
-  { name: "Customer in Zanzibar City / Stone Town", lat: -6.163, lng: 39.189 }
-];
-
 const paymentMethods = [
   { id: "mpesa", name: "M-Pesa", icon: WalletCards, prompt: "Enter customer phone and M-Pesa transaction code." },
   { id: "tigopesa", name: "Tigo Pesa", icon: WalletCards, prompt: "Enter customer phone and Tigo Pesa transaction code." },
@@ -97,12 +88,6 @@ const customerSteps = [
   { title: "Delivered", icon: ReceiptText }
 ];
 
-const dashboardOrders = [
-  { id: "FG-1027", customer: "Amina Juma", product: "15kg LPG x1", status: "New", payment: "M-Pesa", eta: "24 min" },
-  { id: "FG-1026", customer: "Bububu Cafe", product: "38kg LPG x1", status: "Preparing", payment: "Tigo Pesa", eta: "36 min" },
-  { id: "FG-1025", customer: "Salim M.", product: "6kg LPG x2", status: "On the way", payment: "Cash", eta: "11 min" }
-];
-
 const stockRows = [
   { label: "6kg LPG", value: 64, level: 86 },
   { label: "15kg LPG", value: 31, level: 54 },
@@ -113,18 +98,7 @@ const stockRows = [
 const processRows = [
   { label: "Phone Order", items: ["Receive call", "Record customer", "Select gas", "Track route"], icon: UsersRound },
   { label: "Store Dashboard", items: ["Receive orders", "Manage stock", "Assign riders", "View revenue"], icon: Store },
-  { label: "Admin Control Panel", items: ["Manage store", "Monitor orders", "Analytics", "Promotions"], icon: ShieldCheck }
-];
-
-const featureChecks = [
-  { label: "Live GPS Tracking", icon: MapPin },
-  { label: "Mobile Money Payments", icon: WalletCards },
-  { label: "One-Tap Reorder", icon: RefreshCcw },
-  { label: "Digital Receipts", icon: ReceiptText },
-  { label: "Push Notifications", icon: Bell },
-  { label: "Loyalty & Promo System", icon: Megaphone },
-  { label: "Analytics Dashboard", icon: ChartNoAxesCombined },
-  { label: "Swahili + English", icon: Languages }
+  { label: "Admin Control Panel", items: ["Monitor order", "Review payment", "Check transport", "Confirm delivered time"], icon: ShieldCheck }
 ];
 
 function money(value) {
@@ -137,6 +111,30 @@ function arrivalTime(minutes, now) {
     hour: "2-digit",
     minute: "2-digit"
   }).format(new Date(now.getTime() + minutes * 60000));
+}
+
+function exactTime(value) {
+  if (!value) return "Not delivered";
+  return new Intl.DateTimeFormat("en-TZ", {
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(new Date(value));
+}
+
+function localTanzaniaPhone(value) {
+  let digits = value.replace(/\D/g, "");
+  if (digits.startsWith("255")) digits = digits.slice(3);
+  if (digits.startsWith("0")) digits = digits.slice(1);
+  return digits.slice(0, 9);
+}
+
+function fullTanzaniaPhone(value) {
+  const local = localTanzaniaPhone(value);
+  return local ? `+255${local}` : "";
+}
+
+function isValidTanzaniaPhone(value) {
+  return /^[67]\d{8}$/.test(localTanzaniaPhone(value));
 }
 
 function mapViewport(depot, destination) {
@@ -194,6 +192,93 @@ function writeStoredUsers(users) {
   window.localStorage.setItem(USERS_KEY, JSON.stringify(users));
 }
 
+function isValidEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function verificationCode() {
+  const values = new Uint32Array(1);
+  window.crypto.getRandomValues(values);
+  return String(100000 + (values[0] % 900000));
+}
+
+function captchaChallenge() {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const values = new Uint32Array(6);
+  window.crypto.getRandomValues(values);
+  const answer = Array.from(values, (value) => alphabet[value % alphabet.length]).join("");
+
+  return {
+    question: answer,
+    answer
+  };
+}
+
+async function sendVerificationEmail(email, code, purpose) {
+  const serviceId = import.meta.env.VITE_EMAILJS_SERVICE_ID;
+  const templateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID;
+  const publicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY;
+  const emailKeys = [serviceId, templateId, publicKey];
+  const hasPlaceholderKeys = emailKeys.some((value) => !value || value.startsWith("your_"));
+
+  if (hasPlaceholderKeys) {
+    return {
+      ok: false,
+      error: "Email service keys are still placeholders. Replace them in .env with real EmailJS values."
+    };
+  }
+
+  try {
+    const response = await fetch("https://api.emailjs.com/api/v1.0/email/send", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        service_id: serviceId,
+        template_id: templateId,
+        user_id: publicKey,
+        template_params: {
+          to_email: email,
+          verification_code: code,
+          verification_purpose: purpose,
+          app_name: "Gas supply in Zanzibar"
+        }
+      })
+    });
+
+    if (response.ok) {
+      return { ok: true };
+    }
+
+    const responseText = await response.text();
+    return {
+      ok: false,
+      error: responseText || "Verification email could not be sent. Check your EmailJS service, template, and public key."
+    };
+  } catch {
+    return {
+      ok: false,
+      error: "Verification email could not be sent. Check your internet connection and EmailJS setup."
+    };
+  }
+}
+
+function TanzaniaPhoneInput({ value, onChange, placeholder = "777305695" }) {
+  return (
+    <span className="phone-input">
+      <span>+255</span>
+      <input
+        value={localTanzaniaPhone(value)}
+        onChange={(event) => onChange(fullTanzaniaPhone(event.target.value))}
+        placeholder={placeholder}
+        inputMode="numeric"
+        maxLength={9}
+      />
+    </span>
+  );
+}
+
 function App() {
   const [authUser, setAuthUser] = useState(() => {
     try {
@@ -217,18 +302,23 @@ function App() {
   const [paymentPhone, setPaymentPhone] = useState("");
   const [paymentProof, setPaymentProof] = useState("");
   const [paymentError, setPaymentError] = useState("");
-  const [deliveryLocation, setDeliveryLocation] = useState(deliveryLocations[0]);
   const [deliveredTo, setDeliveredTo] = useState("");
+  const [riderName, setRiderName] = useState("");
+  const [riderPhone, setRiderPhone] = useState("");
+  const [vehicleType, setVehicleType] = useState("");
+  const [vehicleNumber, setVehicleNumber] = useState("");
   const [trackingStage, setTrackingStage] = useState(0);
+  const [deliveredAt, setDeliveredAt] = useState(null);
   const [now, setNow] = useState(() => new Date());
 
   const total = useMemo(() => gasType.price * quantity, [gasType, quantity]);
-  const destinationName = deliveredTo.trim() || deliveryLocation.name;
+  const destinationName = deliveredTo.trim() || "Delivery place not typed";
   const destination = useMemo(() => ({
-    ...deliveryLocation,
+    lat: depot.lat,
+    lng: depot.lng,
     name: destinationName
-  }), [deliveryLocation, destinationName]);
-  const mapView = useMemo(() => mapViewport(depot, deliveryLocation), [depot, deliveryLocation]);
+  }), [depot.lat, depot.lng, destinationName]);
+  const mapView = useMemo(() => mapViewport(depot, destination), [depot, destination]);
   const googleUrl = useMemo(() => googleDirectionsUrl(depot, destination), [depot, destination]);
   const osmUrl = useMemo(() => osmDirectionsUrl(depot, destination), [depot, destination]);
   const currentOrder = useMemo(() => ({
@@ -237,14 +327,20 @@ function App() {
     phone: callerPhone.trim() || "No phone recorded",
     notes: callerNotes.trim() || "No call notes",
     product: `${size} ${gasType.name} x${quantity}`,
-    status: paymentStatus === "paid" ? "Paid - ready to dispatch" : paymentStatus === "reserved" ? "Cash reserved" : "Draft order",
+    status: deliveredAt ? "Delivered" : paymentStatus === "paid" ? "Paid - ready to dispatch" : paymentStatus === "reserved" ? "Cash reserved" : "Draft order",
     payment: payment.name,
     total,
     destination: destination.name,
     store: depot.name,
     eta: `${depot.eta} min`,
+    deliveredAt,
+    deliveredTime: exactTime(deliveredAt),
+    riderName: riderName.trim() || "Not assigned",
+    riderPhone: riderPhone.trim() || "No rider phone",
+    vehicle: [vehicleType.trim(), vehicleNumber.trim()].filter(Boolean).join(" - ") || "No vehicle recorded",
+    deliveredBy: riderName.trim() ? `${riderName.trim()} (${[vehicleType.trim(), vehicleNumber.trim()].filter(Boolean).join(" - ") || "vehicle not recorded"})` : "Not assigned",
     reference: paymentReference || "Not confirmed"
-  }), [callerName, callerNotes, callerPhone, depot, destination.name, gasType, payment, paymentReference, paymentStatus, quantity, size, total]);
+  }), [callerName, callerNotes, callerPhone, deliveredAt, depot, destination.name, gasType, payment, paymentReference, paymentStatus, quantity, riderName, riderPhone, size, total, vehicleNumber, vehicleType]);
   const trackingCopy = useMemo(() => {
     if (paymentStatus === "pending") {
       return {
@@ -299,6 +395,7 @@ function App() {
   function updateDepot(item) {
     setDepot(item);
     setTrackingStage(0);
+    setDeliveredAt(null);
   }
 
   function updatePayment(item) {
@@ -309,16 +406,27 @@ function App() {
     setPaymentProof("");
     setPaymentError("");
     setTrackingStage(0);
+    setDeliveredAt(null);
+  }
+
+  function updateTrackingStage(index) {
+    setTrackingStage(index);
+    if (index === orderStages.length - 1) {
+      setDeliveredAt((current) => current || new Date().toISOString());
+      return;
+    }
+
+    setDeliveredAt(null);
   }
 
   function confirmPayment() {
     const recordedPhone = paymentPhone.trim() || callerPhone.trim();
-    const phoneOk = /^\+?255\d{9}$|^0\d{9}$/.test(recordedPhone);
+    const phoneOk = isValidTanzaniaPhone(recordedPhone);
     const needsPhone = payment.id === "mpesa" || payment.id === "tigopesa";
     const needsReference = payment.id !== "cash";
 
     if (needsPhone && !phoneOk) {
-      setPaymentError("Enter a valid Tanzania phone number, for example +255777305695 or 0777305695.");
+      setPaymentError("Enter a valid Tanzania phone number after +255, for example 777305695.");
       return;
     }
 
@@ -402,8 +510,6 @@ function App() {
               paymentPhone={paymentPhone}
               paymentProof={paymentProof}
               paymentError={paymentError}
-              deliveryLocation={deliveryLocation}
-              deliveryLocations={deliveryLocations}
               deliveredTo={deliveredTo}
               destination={destination}
               mapView={mapView}
@@ -414,6 +520,10 @@ function App() {
               now={now}
               contactPhone={CONTACT_PHONE}
               contactDisplay={CONTACT_DISPLAY}
+              riderName={riderName}
+              riderPhone={riderPhone}
+              vehicleType={vehicleType}
+              vehicleNumber={vehicleNumber}
               total={total}
               onGasType={updateGasType}
               onSize={setSize}
@@ -426,9 +536,12 @@ function App() {
               onPaymentConfirm={confirmPayment}
               onPaymentPhone={setPaymentPhone}
               onPaymentProof={setPaymentProof}
-              onDeliveryLocation={setDeliveryLocation}
               onDeliveredTo={setDeliveredTo}
-              onTrackingStage={setTrackingStage}
+              onRiderName={setRiderName}
+              onRiderPhone={setRiderPhone}
+              onVehicleType={setVehicleType}
+              onVehicleNumber={setVehicleNumber}
+              onTrackingStage={updateTrackingStage}
             />
             <div className="step-actions">
               <button className="icon-button" onClick={() => setStep(Math.max(0, step - 1))} aria-label="Previous step">
@@ -488,6 +601,12 @@ function AuthPage({ onAuth }) {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [verification, setVerification] = useState("");
+  const [captcha, setCaptcha] = useState(() => captchaChallenge());
+  const [captchaAnswer, setCaptchaAnswer] = useState("");
+  const [pendingReset, setPendingReset] = useState(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -497,13 +616,19 @@ function AuthPage({ onAuth }) {
     setError("");
     setPassword("");
     setConfirmPassword("");
+    setShowPassword(false);
+    setShowConfirmPassword(false);
+    setVerification("");
+    setCaptcha(captchaChallenge());
+    setCaptchaAnswer("");
+    setPendingReset(null);
   }
 
   function cleanEmail() {
     return email.trim().toLowerCase();
   }
 
-  function submitAuth(event) {
+  async function submitAuth(event) {
     event.preventDefault();
     setMessage("");
     setError("");
@@ -512,12 +637,17 @@ function AuthPage({ onAuth }) {
     const users = readStoredUsers();
     const existingUser = users.find((user) => user.email === normalizedEmail);
 
-    if (!normalizedEmail || !password) {
-      setError("Enter email and password.");
+    if (!normalizedEmail || !isValidEmail(normalizedEmail)) {
+      setError("Enter a valid email address.");
       return;
     }
 
     if (mode === "login") {
+      if (!password) {
+        setError("Enter email and password.");
+        return;
+      }
+
       if (!existingUser || existingUser.password !== password) {
         setError("Email or password is incorrect.");
         return;
@@ -528,6 +658,11 @@ function AuthPage({ onAuth }) {
     }
 
     if (mode === "register") {
+      if (!password) {
+        setError("Enter email and password.");
+        return;
+      }
+
       if (!name.trim()) {
         setError("Enter your name.");
         return;
@@ -538,8 +673,20 @@ function AuthPage({ onAuth }) {
         return;
       }
 
+      if (password !== confirmPassword) {
+        setError("Passwords do not match.");
+        return;
+      }
+
       if (existingUser) {
         setError("This email is already registered. Login instead.");
+        return;
+      }
+
+      if (captchaAnswer.trim().toUpperCase() !== captcha.answer) {
+        setError("Complete the CAPTCHA correctly.");
+        setCaptcha(captchaChallenge());
+        setCaptchaAnswer("");
         return;
       }
 
@@ -547,7 +694,8 @@ function AuthPage({ onAuth }) {
         name: name.trim(),
         email: normalizedEmail,
         phone: phone.trim(),
-        password
+        password,
+        verified: true
       };
 
       writeStoredUsers([...users, newUser]);
@@ -557,6 +705,28 @@ function AuthPage({ onAuth }) {
 
     if (!existingUser) {
       setError("No account found with this email.");
+      return;
+    }
+
+    if (!pendingReset || pendingReset.email !== normalizedEmail) {
+      const code = verificationCode();
+      const emailResult = await sendVerificationEmail(normalizedEmail, code, "reset password");
+
+      if (!emailResult.ok) {
+        setError(emailResult.error);
+        return;
+      }
+
+      setPendingReset({
+        email: normalizedEmail,
+        code
+      });
+      setMessage(`Verification code sent to ${normalizedEmail}. Check your email.`);
+      return;
+    }
+
+    if (verification.trim() !== pendingReset.code) {
+      setError("Verification code is incorrect.");
       return;
     }
 
@@ -577,25 +747,28 @@ function AuthPage({ onAuth }) {
     setMode("login");
     setPassword("");
     setConfirmPassword("");
+    setVerification("");
+    setPendingReset(null);
   }
 
-  const actionLabel = mode === "login" ? "Login" : mode === "register" ? "Register" : "Reset password";
+  const actionLabel = mode === "login"
+    ? "Login"
+    : mode === "register"
+      ? "Register"
+      : pendingReset ? "Verify and reset password" : "Send verification email";
+  const authTitle = mode === "login" ? "Login" : mode === "register" ? "Register" : "Forgot password";
 
   return (
-    <main className="auth-shell">
-      <section className="auth-panel">
+    <main className={`auth-shell auth-shell-${mode}`}>
+      <section className={`auth-panel auth-panel-${mode}`}>
         <div className="auth-brand">
           <span><Store size={24} /></span>
           <h1>Gas supply in Zanzibar</h1>
         </div>
 
-        <div className="auth-tabs" aria-label="Account actions">
-          <button className={mode === "login" ? "active" : ""} onClick={() => resetFeedback("login")}>Login</button>
-          <button className={mode === "register" ? "active" : ""} onClick={() => resetFeedback("register")}>Register</button>
-          <button className={mode === "forgot" ? "active" : ""} onClick={() => resetFeedback("forgot")}>Forgot password</button>
-        </div>
+        <h2 className="auth-title">{authTitle}</h2>
 
-        <form className="auth-form" onSubmit={submitAuth}>
+        <form className={`auth-form auth-form-${mode}`} onSubmit={submitAuth}>
           {mode === "register" && (
             <label className="field-label">
               Full name
@@ -611,24 +784,77 @@ function AuthPage({ onAuth }) {
           {mode === "register" && (
             <label className="field-label">
               Phone
-              <input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+255777305695" />
+              <TanzaniaPhoneInput value={phone} onChange={setPhone} />
             </label>
           )}
 
-          <label className="field-label">
-            {mode === "forgot" ? "New password" : "Password"}
-            <input value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 6 characters" type="password" />
-          </label>
+          {(mode !== "forgot" || pendingReset) && (
+            <label className="field-label">
+              {mode === "forgot" ? "New password" : "Password"}
+              <span className="password-input">
+                <input value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 6 characters" type={showPassword ? "text" : "password"} />
+                <button type="button" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? "Hide password" : "Show password"}>
+                  {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                </button>
+              </span>
+            </label>
+          )}
 
-          {mode === "forgot" && (
+          {mode === "register" && (
+            <label className="field-label">
+              Confirm password
+              <span className="password-input">
+                <input value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Repeat password" type={showConfirmPassword ? "text" : "password"} />
+                <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}>
+                  {showConfirmPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                </button>
+              </span>
+            </label>
+          )}
+
+          {mode === "register" && (
+            <label className="field-label">
+              CAPTCHA
+              <span className="captcha-row">
+                <strong aria-label="CAPTCHA code">
+                  {captcha.question.split("").map((character, index) => (
+                    <span key={`${character}-${index}`}>{character}</span>
+                  ))}
+                </strong>
+                <input value={captchaAnswer} onChange={(event) => setCaptchaAnswer(event.target.value)} placeholder="6 letters/numbers" autoCapitalize="characters" maxLength={6} />
+                <button className="icon-button" type="button" onClick={() => {
+                  setCaptcha(captchaChallenge());
+                  setCaptchaAnswer("");
+                }} aria-label="Refresh CAPTCHA">
+                  <RefreshCcw size={17} />
+                </button>
+              </span>
+            </label>
+          )}
+
+          {mode === "forgot" && pendingReset && (
+            <label className="field-label">
+              Verification code
+              <input value={verification} onChange={(event) => setVerification(event.target.value)} placeholder="Enter the 6-digit code" inputMode="numeric" />
+            </label>
+          )}
+
+          {mode === "forgot" && pendingReset && (
             <label className="field-label">
               Confirm new password
-              <input value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Repeat new password" type="password" />
+              <span className="password-input">
+                <input value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Repeat new password" type={showConfirmPassword ? "text" : "password"} />
+                <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}>
+                  {showConfirmPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                </button>
+              </span>
             </label>
           )}
 
-          {error && <div className="payment-error">{error}</div>}
-          {message && <div className="payment-success"><CheckCircle2 size={20} /><span><strong>{message}</strong></span></div>}
+          <div className={`auth-feedback ${!error && !message ? "empty" : ""}`}>
+            {error && <div className="payment-error">{error}</div>}
+            {message && <div className="payment-success"><CheckCircle2 size={20} /><span><strong>{message}</strong></span></div>}
+          </div>
 
           <button className="primary-action full-width" type="submit">
             {mode === "login" && <KeyRound size={17} />}
@@ -636,6 +862,15 @@ function AuthPage({ onAuth }) {
             {mode === "forgot" && <Mail size={17} />}
             {actionLabel}
           </button>
+
+          <div className="auth-switch">
+            <button type="button" onClick={() => resetFeedback(mode === "register" ? "login" : "register")}>
+              {mode === "register" ? "Login" : "Register"}
+            </button>
+            <button type="button" onClick={() => resetFeedback(mode === "forgot" ? "login" : "forgot")}>
+              {mode === "forgot" ? "Login" : "Forgot password"}
+            </button>
+          </div>
         </form>
       </section>
     </main>
@@ -658,8 +893,6 @@ function CustomerStep(props) {
     paymentPhone,
     paymentProof,
     paymentError,
-    deliveryLocation,
-    deliveryLocations,
     deliveredTo,
     destination,
     mapView,
@@ -670,6 +903,10 @@ function CustomerStep(props) {
     now,
     contactPhone,
     contactDisplay,
+    riderName,
+    riderPhone,
+    vehicleType,
+    vehicleNumber,
     total,
     onGasType,
     onSize,
@@ -682,8 +919,11 @@ function CustomerStep(props) {
     onPaymentConfirm,
     onPaymentPhone,
     onPaymentProof,
-    onDeliveryLocation,
     onDeliveredTo,
+    onRiderName,
+    onRiderPhone,
+    onVehicleType,
+    onVehicleNumber,
     onTrackingStage
   } = props;
 
@@ -700,11 +940,7 @@ function CustomerStep(props) {
         </label>
         <label className="field-label">
           Customer phone
-          <input
-            value={callerPhone}
-            onChange={(event) => onCallerPhone(event.target.value)}
-            placeholder="+255777305695"
-          />
+          <TanzaniaPhoneInput value={callerPhone} onChange={onCallerPhone} />
         </label>
         <label className="field-label full-span">
           Call notes
@@ -763,22 +999,6 @@ function CustomerStep(props) {
             placeholder="Example: Amina Juma, Bububu Cafe, or Stone Town shop"
           />
         </label>
-        <label className="field-label">
-          Delivery area
-          <select value={deliveryLocation.name} onChange={(event) => onDeliveryLocation(deliveryLocations.find((item) => item.name === event.target.value) || deliveryLocations[0])}>
-            {deliveryLocations.map((item) => (
-              <option key={item.name} value={item.name}>{item.name}</option>
-            ))}
-          </select>
-        </label>
-        <ExactMap
-          className="summary-map inline-map"
-          title="Selected delivery map"
-          mapView={mapView}
-          depot={depot}
-          destination={destination}
-          metaTitle="Selected delivery route"
-        />
         <div className="field-label">
           Taken from gas store
         </div>
@@ -795,7 +1015,7 @@ function CustomerStep(props) {
           <Route size={21} />
           <span>
             <strong>Store to delivery route</strong>
-            <small>The route from {depot.name} to {destination.name} is shown on the map above.</small>
+            <small>Gas is taken from {depot.name} and delivered to {destination.name}.</small>
           </span>
         </div>
       </div>
@@ -828,11 +1048,7 @@ function CustomerStep(props) {
               {payment.id !== "card" && (
                 <label className="field-label">
                   Customer phone
-                  <input
-                    value={paymentPhone}
-                    onChange={(event) => onPaymentPhone(event.target.value)}
-                    placeholder={callerPhone || "+255777305695"}
-                  />
+                  <TanzaniaPhoneInput value={paymentPhone} onChange={onPaymentPhone} />
                 </label>
               )}
               <label className="field-label">
@@ -875,12 +1091,37 @@ function CustomerStep(props) {
 
   if (step === 5) {
     const trackingLocked = paymentStatus === "pending";
+    const riderInitials = riderName.trim()
+      ? riderName.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase()
+      : "RD";
+    const riderPhoneLink = riderPhone.trim() || contactPhone;
     return (
       <div className="tracking-card">
+        <div className="call-form">
+          <label className="field-label">
+            Rider name
+            <input value={riderName} onChange={(event) => onRiderName(event.target.value)} placeholder="Example: Joseph M." />
+          </label>
+          <label className="field-label">
+            Rider phone
+            <TanzaniaPhoneInput value={riderPhone} onChange={onRiderPhone} />
+          </label>
+          <label className="field-label">
+            Vehicle type
+            <input value={vehicleType} onChange={(event) => onVehicleType(event.target.value)} placeholder="Example: Motorcycle" />
+          </label>
+          <label className="field-label">
+            Vehicle number
+            <input value={vehicleNumber} onChange={(event) => onVehicleNumber(event.target.value)} placeholder="Example: ZNZ 123 AB" />
+          </label>
+        </div>
         <div className="rider-strip">
-          <span className="avatar">JM</span>
-          <span><strong>Joseph M.</strong><small><Star size={14} fill="currentColor" /> 4.9 rider rating - {trackingCopy.label}</small></span>
-          <a className="icon-button" href={`tel:${contactPhone}`} aria-label="Call rider"><Phone size={18} /></a>
+          <span className="avatar">{riderInitials}</span>
+          <span>
+            <strong>{riderName || "Transport not assigned"}</strong>
+            <small><Star size={14} fill="currentColor" /> {vehicleType || "Vehicle type not recorded"} {vehicleNumber && `- ${vehicleNumber}`} - {trackingCopy.label}</small>
+          </span>
+          <a className="icon-button" href={`tel:${riderPhoneLink}`} aria-label="Call rider"><Phone size={18} /></a>
         </div>
         <ExactMap
           className="summary-map inline-map tracking-map"
@@ -925,8 +1166,8 @@ function CustomerStep(props) {
             <Clock3 size={18} />
             <span>Manager updated: {arrivalTime(0, now)}</span>
           </div>
-          <a className="contact-link" href={`tel:${contactPhone}`}>
-            <Phone size={16} /> Call {contactDisplay}
+          <a className="contact-link" href={`tel:${riderPhoneLink}`}>
+            <Phone size={16} /> Call {riderPhone || contactDisplay}
           </a>
         </div>
         <div className="tracking-stages">
@@ -955,7 +1196,7 @@ function CustomerStep(props) {
     <div className="delivered-panel">
       <ReceiptText size={34} />
       <h3>Delivery confirmed</h3>
-      <p>Digital receipt saved to order history. Customer can rate the store and rider, then reorder in one tap.</p>
+      <p>Digital receipt saved with customer, store, transport, and delivered time details.</p>
       <div className="rating-row">
         {[1, 2, 3, 4, 5].map((item) => <Star key={item} size={22} fill="currentColor" />)}
       </div>
@@ -1006,7 +1247,7 @@ function DepotDashboard({ currentOrder }) {
       <div className="panel">
         <div className="section-heading">
           <p className="eyebrow">Zanzibar LPG Stores</p>
-          <h2>Orders arriving now</h2>
+          <h2>Current order</h2>
         </div>
         <div className="active-order">
           <span>
@@ -1018,17 +1259,14 @@ function DepotDashboard({ currentOrder }) {
           <span className="pill">{currentOrder.status}</span>
           <b>{money(currentOrder.total)}</b>
         </div>
-        <div className="order-table">
-          {dashboardOrders.map((order) => (
-            <div className="order-row" key={order.id}>
-              <span><strong>{order.id}</strong><small>{order.customer}</small></span>
-              <span>{order.product}</span>
-              <span className="pill">{order.status}</span>
-              <span>{order.payment}</span>
-              <b>{order.eta}</b>
-            </div>
-          ))}
-        </div>
+        <dl className="order-summary">
+          <div><dt>Payment</dt><dd>{currentOrder.payment}</dd></div>
+          <div><dt>Store</dt><dd>{currentOrder.store}</dd></div>
+          <div><dt>Delivered by</dt><dd>{currentOrder.deliveredBy}</dd></div>
+          <div><dt>Rider phone</dt><dd>{currentOrder.riderPhone}</dd></div>
+          <div><dt>Delivered time</dt><dd>{currentOrder.deliveredTime}</dd></div>
+          <div><dt>Reference</dt><dd>{currentOrder.reference}</dd></div>
+        </dl>
       </div>
       <div className="panel">
         <div className="section-heading">
@@ -1077,22 +1315,13 @@ function AdminPanel({ currentOrder, mapView, depot, destination }) {
           <div><dt>Order</dt><dd>{currentOrder.product}</dd></div>
           <div><dt>Payment</dt><dd>{currentOrder.payment}</dd></div>
           <div><dt>Status</dt><dd>{currentOrder.status}</dd></div>
+          <div><dt>Delivered by</dt><dd>{currentOrder.deliveredBy}</dd></div>
+          <div><dt>Rider phone</dt><dd>{currentOrder.riderPhone}</dd></div>
+          <div><dt>Vehicle</dt><dd>{currentOrder.vehicle}</dd></div>
+          <div><dt>Delivered time</dt><dd>{currentOrder.deliveredTime}</dd></div>
           <div><dt>Reference</dt><dd>{currentOrder.reference}</dd></div>
           <div><dt>Call notes</dt><dd>{currentOrder.notes}</dd></div>
         </dl>
-      </div>
-      <div className="panel admin-actions">
-        {[
-          [Store, "Manage store", "Update stock and service zones."],
-          [Truck, "Manage riders", "Track accountability, ratings, and delivery time."],
-          [Megaphone, "Promotions", "Push discounts, loyalty points, and campaigns."],
-          [ChartNoAxesCombined, "Reports", "Review revenue, stock, and store performance."]
-        ].map(([Icon, title, copy]) => (
-          <div className="admin-action" key={title}>
-            <Icon size={22} />
-            <span><strong>{title}</strong><small>{copy}</small></span>
-          </div>
-        ))}
       </div>
     </section>
   );
@@ -1134,25 +1363,10 @@ function ProcessCheck({ currentOrder }) {
           <div><dt>Product</dt><dd>{currentOrder.product}</dd></div>
           <div><dt>Destination</dt><dd>{currentOrder.destination}</dd></div>
           <div><dt>ETA</dt><dd>{currentOrder.eta}</dd></div>
+          <div><dt>Delivered by</dt><dd>{currentOrder.deliveredBy}</dd></div>
+          <div><dt>Delivered time</dt><dd>{currentOrder.deliveredTime}</dd></div>
           <div><dt>Total</dt><dd>{money(currentOrder.total)}</dd></div>
         </dl>
-      </div>
-      <div className="panel">
-        <div className="section-heading">
-          <p className="eyebrow">Feature checklist</p>
-          <h2>Proposal coverage</h2>
-        </div>
-        <div className="feature-grid">
-          {featureChecks.map((item) => {
-            const Icon = item.icon;
-            return (
-              <div className="feature-item" key={item.label}>
-                <Icon size={19} />
-                <span>{item.label}</span>
-              </div>
-            );
-          })}
-        </div>
       </div>
     </section>
   );
