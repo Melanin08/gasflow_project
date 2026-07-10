@@ -13,7 +13,6 @@ import {
   Eye,
   EyeOff,
   KeyRound,
-  LogOut,
   Mail,
   MapPin,
   Navigation,
@@ -34,6 +33,7 @@ import {
   WalletCards
 } from "lucide-react";
 import "./styles.css";
+import { getTrackingStageFromElapsed } from "./trackingLogic.js";
 
 const gasTypes = [
   {
@@ -63,6 +63,13 @@ const depots = [
   { name: "Fuoni Gas Store, Zanzibar", distance: "Selected store", status: "Open", stock: 36, rating: 4.8, eta: 18, route: "Fuoni service area, Zanzibar", lat: -6.183, lng: 39.250 },
   { name: "Bububu Gas Store, Zanzibar", distance: "Selected store", status: "Open", stock: 42, rating: 4.8, eta: 15, route: "Bububu service area, Zanzibar", lat: -6.100, lng: 39.217 },
   { name: "Mombasa Gas Store, Zanzibar", distance: "Selected store", status: "Open", stock: 28, rating: 4.7, eta: 20, route: "Mombasa service area, Zanzibar", lat: -6.176, lng: 39.246 }
+];
+
+const riders = [
+  { id: "r1", name: "Asha Khamis", phone: "+255714112233", vehicleType: "Bajaj", vehicleNumber: "TZ-1423", store: "Fuoni Gas Store, Zanzibar", status: "Available", eta: 7 },
+  { id: "r2", name: "Salum Juma", phone: "+255765998877", vehicleType: "Motorbike", vehicleNumber: "TZ-9921", store: "Bububu Gas Store, Zanzibar", status: "Available", eta: 5 },
+  { id: "r3", name: "Mwanaisha Ali", phone: "+255688445566", vehicleType: "Motorbike", vehicleNumber: "TZ-7720", store: "Mombasa Gas Store, Zanzibar", status: "Available", eta: 9 },
+  { id: "r4", name: "Khamis Omar", phone: "+255712334455", vehicleType: "Bajaj", vehicleNumber: "TZ-5534", store: "Fuoni Gas Store, Zanzibar", status: "Busy", eta: 12 }
 ];
 
 const paymentMethods = [
@@ -280,14 +287,8 @@ function TanzaniaPhoneInput({ value, onChange, placeholder = "777305695" }) {
 }
 
 function App() {
-  const [authUser, setAuthUser] = useState(() => {
-    try {
-      return JSON.parse(window.sessionStorage.getItem(SESSION_KEY) || "null");
-    } catch {
-      return null;
-    }
-  });
   const [activeView, setActiveView] = useState("customer");
+  const [selectedRiderId, setSelectedRiderId] = useState(riders[0].id);
   const [step, setStep] = useState(0);
   const [gasType, setGasType] = useState(gasTypes[0]);
   const [size, setSize] = useState("15kg");
@@ -308,11 +309,19 @@ function App() {
   const [vehicleType, setVehicleType] = useState("");
   const [vehicleNumber, setVehicleNumber] = useState("");
   const [trackingStage, setTrackingStage] = useState(0);
+  const [trackingStartedAt, setTrackingStartedAt] = useState(null);
   const [deliveredAt, setDeliveredAt] = useState(null);
   const [now, setNow] = useState(() => new Date());
 
   const total = useMemo(() => gasType.price * quantity, [gasType, quantity]);
   const destinationName = deliveredTo.trim() || "Delivery place not typed";
+  const availableRiders = useMemo(() => {
+    const nearby = riders.filter((rider) => rider.store === depot.name && rider.status === "Available");
+    return nearby.length ? nearby : riders.filter((rider) => rider.status === "Available");
+  }, [depot.name]);
+  const selectedRider = useMemo(() => {
+    return availableRiders.find((rider) => rider.id === selectedRiderId) || availableRiders[0] || riders[0];
+  }, [availableRiders, selectedRiderId]);
   const destination = useMemo(() => ({
     lat: depot.lat,
     lng: depot.lng,
@@ -327,7 +336,11 @@ function App() {
     phone: callerPhone.trim() || "No phone recorded",
     notes: callerNotes.trim() || "No call notes",
     product: `${size} ${gasType.name} x${quantity}`,
-    status: deliveredAt ? "Delivered" : paymentStatus === "paid" ? "Paid - ready to dispatch" : paymentStatus === "reserved" ? "Cash reserved" : "Draft order",
+    status: deliveredAt
+      ? "Delivered"
+      : paymentStatus === "paid" || paymentStatus === "reserved"
+        ? orderStages[Math.min(trackingStage, orderStages.length - 1)]
+        : "Draft order",
     payment: payment.name,
     total,
     destination: destination.name,
@@ -340,7 +353,7 @@ function App() {
     vehicle: [vehicleType.trim(), vehicleNumber.trim()].filter(Boolean).join(" - ") || "No vehicle recorded",
     deliveredBy: riderName.trim() ? `${riderName.trim()} (${[vehicleType.trim(), vehicleNumber.trim()].filter(Boolean).join(" - ") || "vehicle not recorded"})` : "Not assigned",
     reference: paymentReference || "Not confirmed"
-  }), [callerName, callerNotes, callerPhone, deliveredAt, depot, destination.name, gasType, payment, paymentReference, paymentStatus, quantity, riderName, riderPhone, size, total, vehicleNumber, vehicleType]);
+  }), [callerName, callerNotes, callerPhone, deliveredAt, depot, destination.name, gasType, payment, paymentReference, paymentStatus, quantity, riderName, riderPhone, size, total, trackingStage, vehicleNumber, vehicleType]);
   const trackingCopy = useMemo(() => {
     if (paymentStatus === "pending") {
       return {
@@ -355,10 +368,10 @@ function App() {
     }
 
     const stageData = [
-      { label: "Rider at store", eta: depot.eta, progress: 8, position: depot.name, detail: "Cylinder is ready at the selected gas store" },
-      { label: "Picked up from store", eta: Math.max(1, depot.eta - 3), progress: 25, position: "Leaving store area", detail: "Rider has collected the cylinder" },
+      { label: "At store", eta: depot.eta, progress: 8, position: depot.name, detail: "Cylinder is ready at the selected gas store" },
+      { label: "Picked up", eta: Math.max(1, depot.eta - 3), progress: 25, position: "Leaving store area", detail: "Rider has collected the cylinder" },
       { label: "On the way", eta: Math.max(1, Math.ceil(depot.eta * 0.55)), progress: 58, position: "On route to delivery place", detail: "The rider route from store to delivery place is visible on the map" },
-      { label: "Near delivery place", eta: 3, progress: 86, position: destination.name, detail: "Rider is close to the delivery location" },
+      { label: "Near delivery", eta: 3, progress: 86, position: destination.name, detail: "Rider is close to the delivery location" },
       { label: "Delivered", eta: 0, progress: 100, position: destination.name, detail: "Delivery completed and receipt ready" }
     ];
     const current = stageData[Math.min(trackingStage, stageData.length - 1)];
@@ -375,17 +388,41 @@ function App() {
     return () => window.clearInterval(timer);
   }, []);
 
-  function handleAuth(user) {
-    window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(user));
-    setAuthUser(user);
-  }
+  useEffect(() => {
+    if (!selectedRider) {
+      return;
+    }
 
-  function handleLogout() {
-    window.sessionStorage.removeItem(SESSION_KEY);
-    setAuthUser(null);
-    setActiveView("customer");
-    setStep(0);
-  }
+    setRiderName(selectedRider.name);
+    setRiderPhone(selectedRider.phone);
+    setVehicleType(selectedRider.vehicleType);
+    setVehicleNumber(selectedRider.vehicleNumber);
+  }, [selectedRider]);
+
+  useEffect(() => {
+    if (paymentStatus === "pending" || !trackingStartedAt || trackingStage >= orderStages.length - 1) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      const elapsedMs = Date.now() - trackingStartedAt;
+      const nextStage = getTrackingStageFromElapsed(depot.eta, elapsedMs, orderStages.length);
+      setTrackingStage((current) => (current < nextStage ? nextStage : current));
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [depot.eta, paymentStatus, trackingStartedAt]);
+
+  useEffect(() => {
+    if (trackingStage === orderStages.length - 1) {
+      setDeliveredAt((current) => current || new Date().toISOString());
+      return;
+    }
+
+    if (deliveredAt) {
+      setDeliveredAt(null);
+    }
+  }, [deliveredAt, trackingStage]);
 
   function updateGasType(item) {
     setGasType(item);
@@ -395,6 +432,7 @@ function App() {
   function updateDepot(item) {
     setDepot(item);
     setTrackingStage(0);
+    setTrackingStartedAt(null);
     setDeliveredAt(null);
   }
 
@@ -406,6 +444,7 @@ function App() {
     setPaymentProof("");
     setPaymentError("");
     setTrackingStage(0);
+    setTrackingStartedAt(null);
     setDeliveredAt(null);
   }
 
@@ -440,10 +479,7 @@ function App() {
     setPaymentStatus(payment.id === "cash" ? "reserved" : "paid");
     setPaymentError("");
     setTrackingStage(0);
-  }
-
-  if (!authUser) {
-    return <AuthPage onAuth={handleAuth} />;
+    setTrackingStartedAt(Date.now());
   }
 
   return (
@@ -452,9 +488,6 @@ function App() {
         <div>
           <h1>Gas supply in Zanzibar</h1>
         </div>
-        <button className="logout-button" onClick={handleLogout}>
-          <LogOut size={17} /> Logout
-        </button>
       </header>
 
       <nav className="view-tabs" aria-label="Process views">
@@ -479,6 +512,61 @@ function App() {
           <div className="panel process-panel">
             <div className="section-heading">
               <p className="eyebrow">Manager phone order</p>
+            </div>
+            <div className="delivery-briefing">
+              <div className="briefing-card">
+                <p className="eyebrow">Fast dispatch overview</p>
+                <h3>Nearby stores and riders</h3>
+                <div className="briefing-stats">
+                  <div>
+                    <strong>{depots.length}</strong>
+                    <span>Nearby gas stores</span>
+                  </div>
+                  <div>
+                    <strong>{riders.length}</strong>
+                    <span>Company riders</span>
+                  </div>
+                  <div>
+                    <strong>{availableRiders.length}</strong>
+                    <span>Available now</span>
+                  </div>
+                </div>
+              </div>
+              <div className="briefing-card compact-card">
+                <p className="eyebrow">Assigned rider</p>
+                <h3>{selectedRider?.name || "No rider"}</h3>
+                <p>{selectedRider?.vehicleType} • {selectedRider?.vehicleNumber}</p>
+                <p>{selectedRider?.phone}</p>
+              </div>
+            </div>
+            <div className="store-list">
+              {depots.map((store) => (
+                <button
+                  key={store.name}
+                  className={store.name === depot.name ? "store-chip active" : "store-chip"}
+                  onClick={() => updateDepot(store)}
+                  type="button"
+                >
+                  <strong>{store.name}</strong>
+                  <span>{store.eta} min • {store.stock} cylinders</span>
+                </button>
+              ))}
+            </div>
+            <div className="rider-list">
+              {availableRiders.map((rider) => (
+                <button
+                  key={rider.id}
+                  className={selectedRider?.id === rider.id ? "rider-chip active" : "rider-chip"}
+                  onClick={() => setSelectedRiderId(rider.id)}
+                  type="button"
+                >
+                  <div>
+                    <strong>{rider.name}</strong>
+                    <span>{rider.vehicleType} • {rider.vehicleNumber}</span>
+                  </div>
+                  <small>{rider.eta} min away</small>
+                </button>
+              ))}
             </div>
             <div className="stepper" aria-label="Customer ordering steps">
               {customerSteps.map((item, index) => {
@@ -564,6 +652,12 @@ function App() {
               destination={destination}
               metaTitle={trackingCopy.label}
             />
+            <div className="selected-rider-card">
+              <p className="eyebrow">Assigned rider</p>
+              <h3>{selectedRider?.name || "No rider"}</h3>
+              <p>{selectedRider?.phone}</p>
+              <p>{selectedRider?.vehicleType} • {selectedRider?.vehicleNumber}</p>
+            </div>
             <dl className="order-summary">
               <div><dt>Size</dt><dd>{size}</dd></div>
               <div><dt>Quantity</dt><dd>{quantity}</dd></div>
@@ -580,13 +674,15 @@ function App() {
         </section>
       )}
 
-      {activeView === "depot" && <DepotDashboard currentOrder={currentOrder} />}
+      {activeView === "depot" && <DepotDashboard currentOrder={currentOrder} riders={riders} availableRiders={availableRiders} />}
       {activeView === "admin" && (
         <AdminPanel
           currentOrder={currentOrder}
           mapView={mapView}
           depot={depot}
           destination={destination}
+          riders={riders}
+          availableRiders={availableRiders}
         />
       )}
       {activeView === "process" && <ProcessCheck currentOrder={currentOrder} />}
@@ -1175,8 +1271,7 @@ function CustomerStep(props) {
             <button
               className={index <= trackingStage ? "stage active" : "stage"}
               key={stage}
-              disabled={trackingLocked}
-              onClick={() => onTrackingStage(index)}
+              disabled
             >
               <span />
               {stage}
@@ -1241,7 +1336,7 @@ function ExactMap({ className, title, mapView, depot, destination, metaTitle, ro
   );
 }
 
-function DepotDashboard({ currentOrder }) {
+function DepotDashboard({ currentOrder, riders, availableRiders }) {
   return (
     <section className="workspace depot-grid">
       <div className="panel">
@@ -1284,14 +1379,14 @@ function DepotDashboard({ currentOrder }) {
       </div>
       <div className="panel metric-band">
         <Metric icon={CircleDollarSign} label="Daily revenue" value="TZS 1.24M" />
-        <Metric icon={Bike} label="Active riders" value="4" />
-        <Metric icon={ClipboardCheck} label="Completed" value="38" />
+        <Metric icon={Bike} label="Available riders" value={`${availableRiders.length}`} />
+        <Metric icon={ClipboardCheck} label="Company riders" value={`${riders.length}`} />
       </div>
     </section>
   );
 }
 
-function AdminPanel({ currentOrder, mapView, depot, destination }) {
+function AdminPanel({ currentOrder, mapView, depot, destination, riders, availableRiders }) {
   return (
     <section className="workspace admin-layout">
       <div className="panel analytics-panel">
@@ -1317,6 +1412,8 @@ function AdminPanel({ currentOrder, mapView, depot, destination }) {
           <div><dt>Status</dt><dd>{currentOrder.status}</dd></div>
           <div><dt>Delivered by</dt><dd>{currentOrder.deliveredBy}</dd></div>
           <div><dt>Rider phone</dt><dd>{currentOrder.riderPhone}</dd></div>
+          <div><dt>Available riders</dt><dd>{availableRiders.length}</dd></div>
+          <div><dt>Company riders</dt><dd>{riders.length}</dd></div>
           <div><dt>Vehicle</dt><dd>{currentOrder.vehicle}</dd></div>
           <div><dt>Delivered time</dt><dd>{currentOrder.deliveredTime}</dd></div>
           <div><dt>Reference</dt><dd>{currentOrder.reference}</dd></div>

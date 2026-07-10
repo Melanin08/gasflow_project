@@ -1216,6 +1216,112 @@ button.contact-link {
   font-size: 1.35rem;
 }
 
+.delivery-briefing {
+  display: grid;
+  grid-template-columns: 1.3fr 0.8fr;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.briefing-card {
+  border: 1px solid #fed7aa;
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: linear-gradient(145deg, #fff7ed, #ffedd5);
+}
+
+.compact-card p {
+  margin: 4px 0 0;
+  color: rgba(124, 45, 18, 0.8);
+}
+
+.briefing-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.briefing-stats div {
+  display: grid;
+  gap: 2px;
+  padding: 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.briefing-stats strong {
+  font-size: 1.1rem;
+  color: #7c2d12;
+}
+
+.briefing-stats span {
+  font-size: 0.82rem;
+  color: rgba(124, 45, 18, 0.72);
+}
+
+.store-list,
+.rider-list {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.store-chip,
+.rider-chip {
+  width: 100%;
+  border: 1px solid #fed7aa;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #fff;
+  color: inherit;
+  text-align: left;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.store-chip.active,
+.rider-chip.active {
+  border-color: #f97316;
+  background: #fff7ed;
+  box-shadow: 0 8px 20px rgba(249, 115, 22, 0.14);
+}
+
+.store-chip strong,
+.rider-chip strong {
+  display: block;
+  color: #7c2d12;
+}
+
+.store-chip span,
+.rider-chip span,
+.rider-chip small {
+  display: block;
+  color: rgba(124, 45, 18, 0.72);
+  font-size: 0.84rem;
+}
+
+.selected-rider-card {
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border: 1px solid #fed7aa;
+  border-radius: 12px;
+  background: linear-gradient(145deg, #fff7ed, #ffedd5);
+}
+
+.selected-rider-card h3 {
+  margin: 4px 0;
+  color: #7c2d12;
+}
+
+.selected-rider-card p {
+  margin: 2px 0;
+  color: rgba(124, 45, 18, 0.8);
+}
+
 .admin-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
