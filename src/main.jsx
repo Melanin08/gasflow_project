@@ -1,131 +1,130 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
-  Banknote,
+  AlertTriangle,
   Bike,
   CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
-  CircleDollarSign,
-  ClipboardCheck,
   Clock3,
-  CreditCard,
-  Eye,
-  EyeOff,
-  KeyRound,
-  Mail,
+  Flame,
   MapPin,
-  Navigation,
+  MessageCircle,
+  Minus,
   PackageCheck,
   Phone,
   Plus,
-  Minus,
-  ReceiptText,
   RefreshCcw,
   Route,
   Send,
   ShieldCheck,
-  Star,
   Store,
   Truck,
-  UserPlus,
-  UsersRound,
-  WalletCards
+  WalletCards,
+  Warehouse
 } from "lucide-react";
 import "./styles.css";
-import { getTrackingStageFromElapsed } from "./trackingLogic.js";
 
-const gasTypes = [
-  {
-    id: "lpg",
-    name: "LPG Cylinder Refill",
-    price: 28000,
-    note: "Same-day Zanzibar delivery",
-    options: ["6kg", "15kg", "38kg"]
-  },
-  {
-    id: "starter",
-    name: "New Cylinder Setup",
-    price: 76000,
-    note: "Cylinder, regulator, and hose",
-    options: ["6kg kit", "15kg kit", "Regulator"]
-  },
-  {
-    id: "bulk",
-    name: "Commercial LPG Supply",
-    price: 185000,
-    note: "Hotels, cafes, and shops",
-    options: ["38kg", "2 x 38kg", "Scheduled"]
-  }
+const cylinderTypes = [
+  { id: "6kg", label: "6kg refill", price: 18000 },
+  { id: "15kg", label: "15kg refill", price: 42000 },
+  { id: "38kg", label: "38kg refill", price: 115000 },
+  { id: "starter", label: "New setup kit", price: 76000 }
 ];
 
-const depots = [
-  { name: "Fuoni Gas Store, Zanzibar", distance: "Selected store", status: "Open", stock: 36, rating: 4.8, eta: 18, route: "Fuoni service area, Zanzibar", lat: -6.183, lng: 39.250 },
-  { name: "Bububu Gas Store, Zanzibar", distance: "Selected store", status: "Open", stock: 42, rating: 4.8, eta: 15, route: "Bububu service area, Zanzibar", lat: -6.100, lng: 39.217 },
-  { name: "Mombasa Gas Store, Zanzibar", distance: "Selected store", status: "Open", stock: 28, rating: 4.7, eta: 20, route: "Mombasa service area, Zanzibar", lat: -6.176, lng: 39.246 }
+const stores = [
+  { id: "st-01", name: "Stone Town Store", zone: "Stone Town", lat: -6.1629, lng: 39.1926, stock: { "6kg": 19, "15kg": 16, "38kg": 5, starter: 7 }, riders: 4, open: true },
+  { id: "st-02", name: "Fuoni Store", zone: "Fuoni", lat: -6.183, lng: 39.25, stock: { "6kg": 28, "15kg": 24, "38kg": 7, starter: 5 }, riders: 3, open: true },
+  { id: "st-03", name: "Bububu Store", zone: "Bububu", lat: -6.1003, lng: 39.2172, stock: { "6kg": 20, "15kg": 18, "38kg": 6, starter: 3 }, riders: 3, open: true },
+  { id: "st-04", name: "Mwanakwerekwe Store", zone: "Mwanakwerekwe", lat: -6.1759, lng: 39.2288, stock: { "6kg": 14, "15kg": 21, "38kg": 4, starter: 6 }, riders: 2, open: true },
+  { id: "st-05", name: "Mombasa Store", zone: "Mombasa", lat: -6.176, lng: 39.246, stock: { "6kg": 17, "15kg": 13, "38kg": 4, starter: 4 }, riders: 2, open: true },
+  { id: "st-06", name: "Kisauni Store", zone: "Kisauni", lat: -6.1378, lng: 39.2207, stock: { "6kg": 22, "15kg": 15, "38kg": 3, starter: 4 }, riders: 2, open: true },
+  { id: "st-07", name: "Kiembe Samaki Store", zone: "Kiembe Samaki", lat: -6.2234, lng: 39.2212, stock: { "6kg": 11, "15kg": 10, "38kg": 3, starter: 2 }, riders: 1, open: true },
+  { id: "st-08", name: "Jang'ombe Store", zone: "Jang'ombe", lat: -6.1752, lng: 39.2145, stock: { "6kg": 15, "15kg": 12, "38kg": 5, starter: 5 }, riders: 2, open: true },
+  { id: "st-09", name: "Chukwani Store", zone: "Chukwani", lat: -6.227, lng: 39.2244, stock: { "6kg": 9, "15kg": 8, "38kg": 2, starter: 2 }, riders: 1, open: true },
+  { id: "st-10", name: "Nungwi Partner Store", zone: "Nungwi", lat: -5.7264, lng: 39.2987, stock: { "6kg": 18, "15kg": 11, "38kg": 4, starter: 3 }, riders: 2, open: true }
 ];
 
 const riders = [
-  { id: "r1", name: "Asha Khamis", phone: "+255714112233", vehicleType: "Bajaj", vehicleNumber: "TZ-1423", store: "Fuoni Gas Store, Zanzibar", status: "Available", eta: 7 },
-  { id: "r2", name: "Salum Juma", phone: "+255765998877", vehicleType: "Motorbike", vehicleNumber: "TZ-9921", store: "Bububu Gas Store, Zanzibar", status: "Available", eta: 5 },
-  { id: "r3", name: "Mwanaisha Ali", phone: "+255688445566", vehicleType: "Motorbike", vehicleNumber: "TZ-7720", store: "Mombasa Gas Store, Zanzibar", status: "Available", eta: 9 },
-  { id: "r4", name: "Khamis Omar", phone: "+255712334455", vehicleType: "Bajaj", vehicleNumber: "TZ-5534", store: "Fuoni Gas Store, Zanzibar", status: "Busy", eta: 12 }
+  { id: "rd-01", name: "Asha Khamis", phone: "+255 714 112 233", vehicle: "Bajaj ZNZ 1423", storeId: "st-01" },
+  { id: "rd-02", name: "Salum Juma", phone: "+255 765 998 877", vehicle: "Bike ZNZ 9921", storeId: "st-02" },
+  { id: "rd-03", name: "Mwanaisha Ali", phone: "+255 688 445 566", vehicle: "Bike ZNZ 7720", storeId: "st-03" },
+  { id: "rd-04", name: "Khamis Omar", phone: "+255 712 334 455", vehicle: "Bajaj ZNZ 5534", storeId: "st-04" },
+  { id: "rd-05", name: "Yusuf Said", phone: "+255 742 201 404", vehicle: "Bike ZNZ 6201", storeId: "st-05" }
 ];
 
+const zones = ["Stone Town", "Fuoni", "Bububu", "Mwanakwerekwe", "Mombasa", "Kisauni", "Kiembe Samaki", "Jang'ombe", "Chukwani", "Nungwi"];
+const zonePins = {
+  "Stone Town": { lat: -6.1622, lng: 39.1921 },
+  Fuoni: { lat: -6.183, lng: 39.25 },
+  Bububu: { lat: -6.1004, lng: 39.217 },
+  Mwanakwerekwe: { lat: -6.1758, lng: 39.229 },
+  Mombasa: { lat: -6.176, lng: 39.246 },
+  Kisauni: { lat: -6.1378, lng: 39.2207 },
+  "Kiembe Samaki": { lat: -6.2234, lng: 39.2212 },
+  "Jang'ombe": { lat: -6.1752, lng: 39.2145 },
+  Chukwani: { lat: -6.227, lng: 39.2244 },
+  Nungwi: { lat: -5.7264, lng: 39.2987 }
+};
 const paymentMethods = [
-  { id: "mpesa", name: "M-Pesa", icon: WalletCards, prompt: "Enter customer phone and M-Pesa transaction code." },
-  { id: "tigopesa", name: "Tigo Pesa", icon: WalletCards, prompt: "Enter customer phone and Tigo Pesa transaction code." },
-  { id: "card", name: "Card", icon: CreditCard, prompt: "Enter the card payment authorization reference." },
-  { id: "cash", name: "Cash on Delivery", icon: Banknote, prompt: "Reserve the order. Rider collects cash on delivery." }
+  {
+    id: "mpesa",
+    name: "M-Pesa",
+    accountLabel: "Business till / Lipa number",
+    accountValue: "Set your company till number",
+    referenceLabel: "M-Pesa receipt code",
+    instruction: "Customer pays from M-Pesa, then staff records the SMS receipt code."
+  },
+  {
+    id: "tigopesa",
+    name: "Tigo Pesa",
+    accountLabel: "Merchant number",
+    accountValue: "Set your company merchant number",
+    referenceLabel: "Tigo Pesa transaction ID",
+    instruction: "Customer pays through Tigo Pesa, then staff records the transaction ID."
+  },
+  {
+    id: "airtel",
+    name: "Airtel Money",
+    accountLabel: "Merchant number",
+    accountValue: "Set your company merchant number",
+    referenceLabel: "Airtel Money reference",
+    instruction: "Customer pays through Airtel Money, then staff records the reference."
+  },
+  {
+    id: "halopesa",
+    name: "HaloPesa",
+    accountLabel: "Merchant number",
+    accountValue: "Set your company merchant number",
+    referenceLabel: "HaloPesa reference",
+    instruction: "Customer pays through HaloPesa, then staff records the reference."
+  },
+  {
+    id: "cash",
+    name: "Cash on delivery",
+    accountLabel: "Collection",
+    accountValue: "Rider collects cash at delivery",
+    referenceLabel: "Cash receipt",
+    instruction: "Order is reserved now. Rider collects cash and marks payment collected."
+  }
 ];
+const deliveryStages = ["New", "Accepted", "Rider assigned", "On the way", "Delivered"];
 
-const orderStages = ["At store", "Picked up", "On the way", "Near delivery", "Delivered"];
-const CONTACT_PHONE = "+255777305695";
-const CONTACT_DISPLAY = "255 777 305 695";
-const USERS_KEY = "gasflow-users";
-const SESSION_KEY = "gasflow-session";
-
-const customerSteps = [
-  { title: "Call Details", icon: Phone },
-  { title: "Gas Type", icon: PackageCheck },
-  { title: "Size & Qty", icon: Plus },
-  { title: "Delivered To", icon: MapPin },
-  { title: "Payment", icon: CircleDollarSign },
-  { title: "Live Tracking", icon: Truck },
-  { title: "Delivered", icon: ReceiptText }
-];
-
-const stockRows = [
-  { label: "6kg LPG", value: 64, level: 86 },
-  { label: "15kg LPG", value: 31, level: 54 },
-  { label: "38kg LPG", value: 12, level: 32 },
-  { label: "Regulators", value: 18, level: 58 }
-];
-
-const processRows = [
-  { label: "Phone Order", items: ["Receive call", "Record customer", "Select gas", "Track route"], icon: UsersRound },
-  { label: "Store Dashboard", items: ["Receive orders", "Manage stock", "Assign riders", "View revenue"], icon: Store },
-  { label: "Admin Control Panel", items: ["Monitor order", "Review payment", "Check transport", "Confirm delivered time"], icon: ShieldCheck }
-];
+const initialOrders = [];
+const emptyOrderForm = {
+  customer: "",
+  phone: "",
+  zone: "",
+  address: "",
+  cylinder: "",
+  quantity: 1,
+  payment: "",
+  paymentPhone: "",
+  paymentReference: "",
+  notes: "",
+  deliveryLocation: null
+};
 
 function money(value) {
   return `TZS ${value.toLocaleString("en-US")}`;
-}
-
-function arrivalTime(minutes, now) {
-  if (minutes === null) return "--";
-  return new Intl.DateTimeFormat("en-TZ", {
-    hour: "2-digit",
-    minute: "2-digit"
-  }).format(new Date(now.getTime() + minutes * 60000));
-}
-
-function exactTime(value) {
-  if (!value) return "Not delivered";
-  return new Intl.DateTimeFormat("en-TZ", {
-    dateStyle: "medium",
-    timeStyle: "short"
-  }).format(new Date(value));
 }
 
 function localTanzaniaPhone(value) {
@@ -137,148 +136,193 @@ function localTanzaniaPhone(value) {
 
 function fullTanzaniaPhone(value) {
   const local = localTanzaniaPhone(value);
-  return local ? `+255${local}` : "";
+  return local ? `+255 ${local.slice(0, 3)} ${local.slice(3, 6)} ${local.slice(6)}`.trim() : "";
 }
 
-function isValidTanzaniaPhone(value) {
-  return /^[67]\d{8}$/.test(localTanzaniaPhone(value));
+function zonePin(zone) {
+  return zonePins[zone] || zonePins["Stone Town"];
 }
 
-function mapViewport(depot, destination) {
-  const margin = 0.018;
-  const minLng = Math.min(depot.lng, destination.lng) - margin;
-  const minLat = Math.min(depot.lat, destination.lat) - margin;
-  const maxLng = Math.max(depot.lng, destination.lng) + margin;
-  const maxLat = Math.max(depot.lat, destination.lat) + margin;
+function orderDestination(order) {
+  const zone = zonePin(order.zone);
+  return {
+    lat: typeof order.deliveryLat === "number" ? order.deliveryLat : zone.lat,
+    lng: typeof order.deliveryLng === "number" ? order.deliveryLng : zone.lng,
+    label: order.address
+  };
+}
+
+function distanceKm(from, to) {
+  const earthRadiusKm = 6371;
+  const lat1 = (from.lat * Math.PI) / 180;
+  const lat2 = (to.lat * Math.PI) / 180;
+  const deltaLat = ((to.lat - from.lat) * Math.PI) / 180;
+  const deltaLng = ((to.lng - from.lng) * Math.PI) / 180;
+  const a =
+    Math.sin(deltaLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLng / 2) ** 2;
+  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function deliveryMinutesEstimate(from, to) {
+  const urbanSpeedKmh = 24;
+  const routeBuffer = 1.35;
+  const loadAndTrafficBufferMinutes = 4;
+  const travelMinutes = ((distanceKm(from, to) * routeBuffer) / urbanSpeedKmh) * 60;
+  return Math.max(3, Math.ceil(travelMinutes + loadAndTrafficBufferMinutes));
+}
+
+async function geocodeDeliveryAddress(address, zone) {
+  const params = new URLSearchParams({
+    format: "jsonv2",
+    limit: "1",
+    countrycodes: "tz",
+    q: `${address}, ${zone}, Zanzibar, Tanzania`
+  });
+  const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, {
+    headers: { Accept: "application/json" }
+  });
+
+  if (!response.ok) {
+    throw new Error("Map search failed");
+  }
+
+  const results = await response.json();
+  const match = results[0];
+
+  if (!match) return null;
+
+  return {
+    lat: Number(match.lat),
+    lng: Number(match.lon),
+    label: match.display_name || address
+  };
+}
+
+function deliveryStageProgress(status) {
+  const index = Math.max(0, deliveryStages.indexOf(status));
+  if (status === "Delivered") return 100;
+  return [5, 18, 36, 68, 100][index] || 12;
+}
+
+function addressOffset(address = "") {
+  const seed = [...address].reduce((sum, character) => sum + character.charCodeAt(0), 0);
+  const angle = (seed % 360) * (Math.PI / 180);
+  const radius = 0.008 + (seed % 7) * 0.0014;
+  return {
+    lat: Math.sin(angle) * radius,
+    lng: Math.cos(angle) * radius
+  };
+}
+
+function mapDestination(order) {
+  const destination = mapDestination(order);
+  const offset = addressOffset(`${order.address} ${order.zone}`);
+  return {
+    ...destination,
+    lat: destination.lat + offset.lat,
+    lng: destination.lng + offset.lng
+  };
+}
+
+function latLngToWorld(location, zoom) {
+  const scale = 256 * 2 ** zoom;
+  const sinLat = Math.sin((location.lat * Math.PI) / 180);
+  return {
+    x: ((location.lng + 180) / 360) * scale,
+    y: (0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI)) * scale
+  };
+}
+
+function mapZoomForDistance(distance) {
+  if (distance > 18) return 11;
+  if (distance > 7) return 12;
+  if (distance > 2.5) return 13;
+  return 14;
+}
+
+function createTrackingMapView(store, destination, riderPosition) {
+  const points = [store, destination, riderPosition].filter(Boolean);
+  const zoom = mapZoomForDistance(Math.max(distanceKm(store, destination), riderPosition ? distanceKm(riderPosition, destination) : 0));
+  const projectedPoints = points.map((point) => latLngToWorld(point, zoom));
+  const padding = 170;
+  let minX = Math.min(...projectedPoints.map((point) => point.x)) - padding;
+  let maxX = Math.max(...projectedPoints.map((point) => point.x)) + padding;
+  let minY = Math.min(...projectedPoints.map((point) => point.y)) - padding;
+  let maxY = Math.max(...projectedPoints.map((point) => point.y)) + padding;
+  const targetAspect = 1.46;
+  const width = maxX - minX;
+  const height = maxY - minY;
+
+  if (width / height > targetAspect) {
+    const targetHeight = width / targetAspect;
+    const extra = (targetHeight - height) / 2;
+    minY -= extra;
+    maxY += extra;
+  } else {
+    const targetWidth = height * targetAspect;
+    const extra = (targetWidth - width) / 2;
+    minX -= extra;
+    maxX += extra;
+  }
 
   function point(location) {
-    const x = ((location.lng - minLng) / (maxLng - minLng)) * 100;
-    const y = (1 - (location.lat - minLat) / (maxLat - minLat)) * 100;
-
-    return {
-      left: `${x}%`,
-      top: `${y}%`,
-      x,
-      y
-    };
+    const world = latLngToWorld(location, zoom);
+    const x = ((world.x - minX) / (maxX - minX)) * 100;
+    const y = ((world.y - minY) / (maxY - minY)) * 100;
+    return { left: `${x}%`, top: `${y}%`, x, y };
   }
 
-  const depotPoint = point(depot);
+  const storePoint = point(store);
   const destinationPoint = point(destination);
+  const riderPoint = point(riderPosition || store);
+  const tileMinX = Math.floor(minX / 256);
+  const tileMaxX = Math.floor(maxX / 256);
+  const tileMinY = Math.floor(minY / 256);
+  const tileMaxY = Math.floor(maxY / 256);
+  const tiles = [];
 
-  return {
-    embedUrl: `https://www.openstreetmap.org/export/embed.html?bbox=${minLng}%2C${minLat}%2C${maxLng}%2C${maxLat}&layer=mapnik&marker=${destination.lat}%2C${destination.lng}`,
-    depotPoint,
-    destinationPoint,
-    routeLine: {
-      x1: depotPoint.x,
-      y1: depotPoint.y,
-      x2: destinationPoint.x,
-      y2: destinationPoint.y
-    }
-  };
-}
-
-function googleDirectionsUrl(depot, destination) {
-  return `https://www.google.com/maps/dir/?api=1&origin=${depot.lat},${depot.lng}&destination=${destination.lat},${destination.lng}&travelmode=driving`;
-}
-
-function osmDirectionsUrl(depot, destination) {
-  return `https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=${depot.lat}%2C${depot.lng}%3B${destination.lat}%2C${destination.lng}`;
-}
-
-function readStoredUsers() {
-  try {
-    return JSON.parse(window.localStorage.getItem(USERS_KEY) || "[]");
-  } catch {
-    return [];
-  }
-}
-
-function writeStoredUsers(users) {
-  window.localStorage.setItem(USERS_KEY, JSON.stringify(users));
-}
-
-function isValidEmail(value) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-}
-
-function verificationCode() {
-  const values = new Uint32Array(1);
-  window.crypto.getRandomValues(values);
-  return String(100000 + (values[0] % 900000));
-}
-
-function captchaChallenge() {
-  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  const values = new Uint32Array(6);
-  window.crypto.getRandomValues(values);
-  const answer = Array.from(values, (value) => alphabet[value % alphabet.length]).join("");
-
-  return {
-    question: answer,
-    answer
-  };
-}
-
-async function sendVerificationEmail(email, code, purpose) {
-  const serviceId = import.meta.env.VITE_EMAILJS_SERVICE_ID;
-  const templateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID;
-  const publicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY;
-  const emailKeys = [serviceId, templateId, publicKey];
-  const hasPlaceholderKeys = emailKeys.some((value) => !value || value.startsWith("your_"));
-
-  if (hasPlaceholderKeys) {
-    return {
-      ok: false,
-      error: "Email service keys are still placeholders. Replace them in .env with real EmailJS values."
-    };
-  }
-
-  try {
-    const response = await fetch("https://api.emailjs.com/api/v1.0/email/send", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        service_id: serviceId,
-        template_id: templateId,
-        user_id: publicKey,
-        template_params: {
-          to_email: email,
-          verification_code: code,
-          verification_purpose: purpose,
-          app_name: "Gas supply in Zanzibar"
+  for (let x = tileMinX; x <= tileMaxX; x += 1) {
+    for (let y = tileMinY; y <= tileMaxY; y += 1) {
+      tiles.push({
+        key: `${zoom}-${x}-${y}`,
+        url: `https://tile.openstreetmap.org/${zoom}/${x}/${y}.png`,
+        style: {
+          left: `${((x * 256 - minX) / (maxX - minX)) * 100}%`,
+          top: `${((y * 256 - minY) / (maxY - minY)) * 100}%`,
+          width: `${(256 / (maxX - minX)) * 100}%`,
+          height: `${(256 / (maxY - minY)) * 100}%`
         }
-      })
-    });
-
-    if (response.ok) {
-      return { ok: true };
+      });
     }
-
-    const responseText = await response.text();
-    return {
-      ok: false,
-      error: responseText || "Verification email could not be sent. Check your EmailJS service, template, and public key."
-    };
-  } catch {
-    return {
-      ok: false,
-      error: "Verification email could not be sent. Check your internet connection and EmailJS setup."
-    };
   }
+
+  const routePoints = [
+    storePoint,
+    { x: storePoint.x + (destinationPoint.x - storePoint.x) * 0.3, y: storePoint.y - 8 },
+    { x: storePoint.x + (destinationPoint.x - storePoint.x) * 0.56, y: storePoint.y + 12 },
+    { x: storePoint.x + (destinationPoint.x - storePoint.x) * 0.78, y: destinationPoint.y - 8 },
+    destinationPoint
+  ];
+
+  return {
+    directionsUrl: `https://www.google.com/maps/dir/?api=1&origin=${store.lat},${store.lng}&destination=${destination.lat},${destination.lng}&travelmode=driving`,
+    tiles,
+    storePoint,
+    destinationPoint,
+    riderPoint,
+    routePath: routePoints.map((item, index) => `${index === 0 ? "M" : "L"} ${item.x} ${item.y}`).join(" ")
+  };
 }
 
-function TanzaniaPhoneInput({ value, onChange, placeholder = "777305695" }) {
+function TanzaniaPhoneInput({ value, onChange }) {
   return (
     <span className="phone-input">
       <span>+255</span>
       <input
         value={localTanzaniaPhone(value)}
         onChange={(event) => onChange(fullTanzaniaPhone(event.target.value))}
-        placeholder={placeholder}
+        placeholder="777305695"
         inputMode="numeric"
         maxLength={9}
       />
@@ -286,1189 +330,754 @@ function TanzaniaPhoneInput({ value, onChange, placeholder = "777305695" }) {
   );
 }
 
+function getStoreScore(store, destination, cylinder, quantity) {
+  const stockPenalty = store.stock[cylinder] < quantity ? 1000 : 0;
+  const riderPenalty = store.riders < 1 ? 400 : 0;
+  return distanceKm(store, destination) + stockPenalty + riderPenalty;
+}
+
+function recommendStore(destination, cylinder, quantity) {
+  return [...stores]
+    .filter((store) => store.open)
+    .sort((a, b) => getStoreScore(a, destination, cylinder, quantity) - getStoreScore(b, destination, cylinder, quantity))[0];
+}
+
+function pickRider(storeId) {
+  return riders.find((rider) => rider.storeId === storeId) || riders[0];
+}
+
+function getPaymentMethod(paymentId) {
+  return paymentMethods.find((method) => method.id === paymentId) || paymentMethods[0];
+}
+
 function App() {
-  const [activeView, setActiveView] = useState("customer");
-  const [selectedRiderId, setSelectedRiderId] = useState(riders[0].id);
-  const [step, setStep] = useState(0);
-  const [gasType, setGasType] = useState(gasTypes[0]);
-  const [size, setSize] = useState("15kg");
-  const [quantity, setQuantity] = useState(1);
-  const [callerName, setCallerName] = useState("");
-  const [callerPhone, setCallerPhone] = useState("");
-  const [callerNotes, setCallerNotes] = useState("");
-  const [depot, setDepot] = useState(depots[0]);
-  const [payment, setPayment] = useState(paymentMethods[0]);
-  const [paymentStatus, setPaymentStatus] = useState("pending");
-  const [paymentReference, setPaymentReference] = useState("");
-  const [paymentPhone, setPaymentPhone] = useState("");
-  const [paymentProof, setPaymentProof] = useState("");
-  const [paymentError, setPaymentError] = useState("");
-  const [deliveredTo, setDeliveredTo] = useState("");
-  const [riderName, setRiderName] = useState("");
-  const [riderPhone, setRiderPhone] = useState("");
-  const [vehicleType, setVehicleType] = useState("");
-  const [vehicleNumber, setVehicleNumber] = useState("");
-  const [trackingStage, setTrackingStage] = useState(0);
-  const [trackingStartedAt, setTrackingStartedAt] = useState(null);
-  const [deliveredAt, setDeliveredAt] = useState(null);
-  const [now, setNow] = useState(() => new Date());
+  const [view, setView] = useState("dispatch");
+  const [orders, setOrders] = useState(initialOrders);
+  const [riderLocations, setRiderLocations] = useState({});
+  const [dispatchMessage, setDispatchMessage] = useState({ type: "", text: "" });
+  const [form, setForm] = useState(emptyOrderForm);
+  const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
+  const riderWatchers = useRef({});
 
-  const total = useMemo(() => gasType.price * quantity, [gasType, quantity]);
-  const destinationName = deliveredTo.trim() || "Delivery place not typed";
-  const availableRiders = useMemo(() => {
-    const nearby = riders.filter((rider) => rider.store === depot.name && rider.status === "Available");
-    return nearby.length ? nearby : riders.filter((rider) => rider.status === "Available");
-  }, [depot.name]);
-  const selectedRider = useMemo(() => {
-    return availableRiders.find((rider) => rider.id === selectedRiderId) || availableRiders[0] || riders[0];
-  }, [availableRiders, selectedRiderId]);
-  const destination = useMemo(() => ({
-    lat: depot.lat,
-    lng: depot.lng,
-    name: destinationName
-  }), [depot.lat, depot.lng, destinationName]);
-  const mapView = useMemo(() => mapViewport(depot, destination), [depot, destination]);
-  const googleUrl = useMemo(() => googleDirectionsUrl(depot, destination), [depot, destination]);
-  const osmUrl = useMemo(() => osmDirectionsUrl(depot, destination), [depot, destination]);
-  const currentOrder = useMemo(() => ({
-    id: paymentReference || "NEW-ORDER",
-    customer: callerName.trim() || "Phone customer",
-    phone: callerPhone.trim() || "No phone recorded",
-    notes: callerNotes.trim() || "No call notes",
-    product: `${size} ${gasType.name} x${quantity}`,
-    status: deliveredAt
-      ? "Delivered"
-      : paymentStatus === "paid" || paymentStatus === "reserved"
-        ? orderStages[Math.min(trackingStage, orderStages.length - 1)]
-        : "Draft order",
-    payment: payment.name,
-    total,
-    destination: destination.name,
-    store: depot.name,
-    eta: `${depot.eta} min`,
-    deliveredAt,
-    deliveredTime: exactTime(deliveredAt),
-    riderName: riderName.trim() || "Not assigned",
-    riderPhone: riderPhone.trim() || "No rider phone",
-    vehicle: [vehicleType.trim(), vehicleNumber.trim()].filter(Boolean).join(" - ") || "No vehicle recorded",
-    deliveredBy: riderName.trim() ? `${riderName.trim()} (${[vehicleType.trim(), vehicleNumber.trim()].filter(Boolean).join(" - ") || "vehicle not recorded"})` : "Not assigned",
-    reference: paymentReference || "Not confirmed"
-  }), [callerName, callerNotes, callerPhone, deliveredAt, depot, destination.name, gasType, payment, paymentReference, paymentStatus, quantity, riderName, riderPhone, size, total, trackingStage, vehicleNumber, vehicleType]);
-  const trackingCopy = useMemo(() => {
-    if (paymentStatus === "pending") {
-      return {
-        label: "Payment needed",
-        eta: "--",
-        etaMinutes: null,
-        arrival: "--",
-        progress: 0,
-        position: "Waiting for payment or cash reservation",
-        detail: "Record payment before dispatching this order"
-      };
-    }
-
-    const stageData = [
-      { label: "At store", eta: depot.eta, progress: 8, position: depot.name, detail: "Cylinder is ready at the selected gas store" },
-      { label: "Picked up", eta: Math.max(1, depot.eta - 3), progress: 25, position: "Leaving store area", detail: "Rider has collected the cylinder" },
-      { label: "On the way", eta: Math.max(1, Math.ceil(depot.eta * 0.55)), progress: 58, position: "On route to delivery place", detail: "The rider route from store to delivery place is visible on the map" },
-      { label: "Near delivery", eta: 3, progress: 86, position: destination.name, detail: "Rider is close to the delivery location" },
-      { label: "Delivered", eta: 0, progress: 100, position: destination.name, detail: "Delivery completed and receipt ready" }
-    ];
-    const current = stageData[Math.min(trackingStage, stageData.length - 1)];
+  const selectedCylinder = cylinderTypes.find((item) => item.id === form.cylinder);
+  const selectedPayment = form.payment ? getPaymentMethod(form.payment) : null;
+  const hasDeliveryRequest = form.address.trim().length > 0;
+  const hasMappedDeliveryPlace = Boolean(form.deliveryLocation);
+  const canMatchStore = hasMappedDeliveryPlace && Boolean(form.cylinder);
+  const formDestination = useMemo(() => {
+    const fallback = form.deliveryLocation;
+    if (!fallback) return null;
     return {
-      ...current,
-      eta: current.eta === 0 ? "0 min" : `${current.eta} min`,
-      etaMinutes: current.eta,
-      arrival: current.eta === 0 ? "Delivered" : arrivalTime(current.eta, now)
+      lat: fallback.lat,
+      lng: fallback.lng,
+      label: fallback.label || form.address
     };
-  }, [depot, destination.name, now, paymentStatus, trackingStage]);
+  }, [form.address, form.deliveryLocation, form.zone]);
+  const bestStore = useMemo(() => {
+    if (!formDestination || !form.cylinder) return null;
+    return recommendStore(formDestination, form.cylinder, form.quantity);
+  }, [form.cylinder, form.quantity, formDestination]);
+  const storeOptions = useMemo(() => {
+    if (!formDestination || !form.cylinder) return [];
+    return stores
+      .map((store) => ({
+        ...store,
+        distance: distanceKm(store, formDestination),
+        canServe: store.stock[form.cylinder] >= form.quantity && store.riders > 0
+      }))
+      .sort((a, b) => getStoreScore(a, formDestination, form.cylinder, form.quantity) - getStoreScore(b, formDestination, form.cylinder, form.quantity));
+  }, [form.cylinder, form.quantity, formDestination]);
 
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(new Date()), 30000);
-    return () => window.clearInterval(timer);
-  }, []);
+  const activeOrders = orders.filter((order) => order.status !== "Delivered");
+  const trackingOrder = orders[0];
+  const deliveredToday = orders.filter((order) => order.status === "Delivered").length;
+  const lowStockStores = stores.filter((store) => Object.values(store.stock).some((value) => value <= 3));
+  const revenue = orders.reduce((sum, order) => {
+    const item = cylinderTypes.find((type) => type.id === order.cylinder);
+    return sum + (item?.price || 0) * order.quantity;
+  }, 0);
 
-  useEffect(() => {
-    if (!selectedRider) {
-      return;
-    }
-
-    setRiderName(selectedRider.name);
-    setRiderPhone(selectedRider.phone);
-    setVehicleType(selectedRider.vehicleType);
-    setVehicleNumber(selectedRider.vehicleNumber);
-  }, [selectedRider]);
-
-  useEffect(() => {
-    if (paymentStatus === "pending" || !trackingStartedAt || trackingStage >= orderStages.length - 1) {
-      return;
-    }
-
-    const timer = window.setInterval(() => {
-      const elapsedMs = Date.now() - trackingStartedAt;
-      const nextStage = getTrackingStageFromElapsed(depot.eta, elapsedMs, orderStages.length);
-      setTrackingStage((current) => (current < nextStage ? nextStage : current));
-    }, 1000);
-
-    return () => window.clearInterval(timer);
-  }, [depot.eta, paymentStatus, trackingStartedAt]);
-
-  useEffect(() => {
-    if (trackingStage === orderStages.length - 1) {
-      setDeliveredAt((current) => current || new Date().toISOString());
-      return;
-    }
-
-    if (deliveredAt) {
-      setDeliveredAt(null);
-    }
-  }, [deliveredAt, trackingStage]);
-
-  function updateGasType(item) {
-    setGasType(item);
-    setSize(item.options[1] || item.options[0]);
+  function updateForm(key, value) {
+    setForm((current) => ({
+      ...current,
+      [key]: value,
+      ...(["address", "zone"].includes(key) ? { deliveryLocation: null } : {})
+    }));
+    setDispatchMessage({ type: "", text: "" });
   }
 
-  function updateDepot(item) {
-    setDepot(item);
-    setTrackingStage(0);
-    setTrackingStartedAt(null);
-    setDeliveredAt(null);
-  }
-
-  function updatePayment(item) {
-    setPayment(item);
-    setPaymentStatus("pending");
-    setPaymentReference("");
-    setPaymentPhone("");
-    setPaymentProof("");
-    setPaymentError("");
-    setTrackingStage(0);
-    setTrackingStartedAt(null);
-    setDeliveredAt(null);
-  }
-
-  function updateTrackingStage(index) {
-    setTrackingStage(index);
-    if (index === orderStages.length - 1) {
-      setDeliveredAt((current) => current || new Date().toISOString());
+  function useCustomerCurrentLocation() {
+    if (!navigator.geolocation) {
+      setDispatchMessage({ type: "error", text: "This browser cannot use current location." });
       return;
     }
 
-    setDeliveredAt(null);
+    setIsSubmittingOrder(true);
+    setDispatchMessage({ type: "info", text: "Waiting for location permission..." });
+
+    navigator.geolocation.getCurrentPosition((position) => {
+      setForm((current) => ({
+        ...current,
+        address: current.address || "My current location",
+        deliveryLocation: {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+          label: current.address || "My current location"
+        }
+      }));
+      setIsSubmittingOrder(false);
+      setDispatchMessage({ type: "success", text: "Current location added. Store match is ready." });
+    }, () => {
+      setIsSubmittingOrder(false);
+      setDispatchMessage({ type: "error", text: "Location permission was denied or unavailable." });
+    }, {
+      enableHighAccuracy: true,
+      timeout: 12000,
+      maximumAge: 0
+    });
   }
 
-  function confirmPayment() {
-    const recordedPhone = paymentPhone.trim() || callerPhone.trim();
-    const phoneOk = isValidTanzaniaPhone(recordedPhone);
-    const needsPhone = payment.id === "mpesa" || payment.id === "tigopesa";
-    const needsReference = payment.id !== "cash";
-
-    if (needsPhone && !phoneOk) {
-      setPaymentError("Enter a valid Tanzania phone number after +255, for example 777305695.");
+  async function placeOrder() {
+    if (!form.customer.trim()) {
+      setDispatchMessage({ type: "error", text: "Enter the customer name before dispatching." });
       return;
     }
 
-    if (needsReference && paymentProof.trim().length < 5) {
-      setPaymentError(payment.id === "card" ? "Enter the card authorization reference." : "Enter the mobile money transaction reference from the payment message.");
+    if (localTanzaniaPhone(form.phone).length !== 9) {
+      setDispatchMessage({ type: "error", text: "Enter the customer phone number after +255, for example 777305695." });
       return;
     }
 
-    const prefix = payment.id === "cash" ? "COD" : payment.id.toUpperCase();
-    setPaymentReference(payment.id === "cash" ? `${prefix}-${Date.now().toString().slice(-6)}` : paymentProof.trim().toUpperCase());
-    setPaymentStatus(payment.id === "cash" ? "reserved" : "paid");
-    setPaymentError("");
-    setTrackingStage(0);
-    setTrackingStartedAt(Date.now());
+    if (!form.address.trim()) {
+      setDispatchMessage({ type: "error", text: "Enter the exact delivery address before dispatching." });
+      return;
+    }
+
+    if (!form.cylinder) {
+      setDispatchMessage({ type: "error", text: "Choose the gas type before placing the order." });
+      return;
+    }
+
+    if (!selectedPayment) {
+      setDispatchMessage({ type: "error", text: "Choose the mode of payment before placing the order." });
+      return;
+    }
+
+    const isCashOrder = selectedPayment.id === "cash";
+    const paymentPhone = form.paymentPhone.trim() || form.phone.trim();
+
+    if (!isCashOrder && localTanzaniaPhone(paymentPhone).length !== 9) {
+      setDispatchMessage({ type: "error", text: `Enter the phone that paid by ${selectedPayment.name}.` });
+      return;
+    }
+
+    if (!isCashOrder && form.paymentReference.trim().length < 6) {
+      setDispatchMessage({ type: "error", text: `Enter the ${selectedPayment.referenceLabel.toLowerCase()} from the payment message.` });
+      return;
+    }
+
+    setIsSubmittingOrder(true);
+    setDispatchMessage({ type: "info", text: "Finding the delivery place on the map..." });
+
+    let deliveryLocation = form.deliveryLocation;
+    try {
+      if (!deliveryLocation) {
+        deliveryLocation = await geocodeDeliveryAddress(form.address.trim(), form.zone);
+      }
+
+      if (!deliveryLocation) {
+        setDispatchMessage({
+          type: "error",
+          text: "I could not find that typed place on the map. Add a clearer landmark, street, shop, or building name."
+        });
+        return;
+      }
+    } catch {
+      setDispatchMessage({
+        type: "error",
+        text: "Map search is not available now. Check the internet connection and try again."
+      });
+      return;
+    } finally {
+      setIsSubmittingOrder(false);
+    }
+
+    const store = recommendStore(deliveryLocation, form.cylinder, form.quantity);
+    const rider = pickRider(store.id);
+    const order = {
+      ...form,
+      id: `GF-${Math.floor(9000 + Math.random() * 900)}`,
+      customer: form.customer.trim(),
+      phone: form.phone.trim(),
+      address: form.address.trim(),
+      payment: selectedPayment.id,
+      paymentStatus: isCashOrder ? "Cash pending" : "Paid",
+      paymentReference: isCashOrder ? `COD-${Date.now().toString().slice(-5)}` : form.paymentReference.trim().toUpperCase(),
+      paymentPhone: isCashOrder ? "" : fullTanzaniaPhone(paymentPhone),
+      status: "Accepted",
+      storeId: store.id,
+      riderId: rider.id,
+      mapAddress: deliveryLocation.label,
+      createdAt: new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" }).format(new Date())
+    };
+    order.deliveryLat = deliveryLocation.lat;
+    order.deliveryLng = deliveryLocation.lng;
+
+    setOrders((current) => [order, ...current]);
+    setForm(emptyOrderForm);
+    setDispatchMessage({
+      type: "success",
+      text: `${order.id} placed with real map location. Rider: ${rider.name}.`
+    });
+    setView("tracking");
+  }
+
+  function advanceOrder(orderId) {
+    const currentOrder = orders.find((order) => order.id === orderId);
+    const currentIndex = deliveryStages.indexOf(currentOrder?.status);
+    const nextStatus = deliveryStages[Math.min(deliveryStages.length - 1, currentIndex + 1)];
+
+    setOrders((current) =>
+      current.map((order) => {
+        if (order.id !== orderId) return order;
+        return { ...order, status: nextStatus };
+      })
+    );
+
+    if (nextStatus === "Delivered") {
+      setView("tracking");
+    }
+  }
+
+  function resetDemo() {
+    Object.values(riderWatchers.current).forEach((watchId) => navigator.geolocation?.clearWatch?.(watchId));
+    riderWatchers.current = {};
+    setOrders(initialOrders);
+    setRiderLocations({});
+  }
+
+  function updateRiderLocation(riderId, location) {
+    setRiderLocations((current) => ({
+      ...current,
+      [riderId]: {
+        lat: location.lat,
+        lng: location.lng,
+        updatedAt: new Date().toISOString()
+      }
+    }));
+  }
+
+  function useRiderBrowserGps(orderId) {
+    const order = orders.find((item) => item.id === orderId);
+    if (!order) return;
+    if (!navigator.geolocation) {
+      setDispatchMessage({ type: "error", text: "This device/browser does not support GPS sharing." });
+      return;
+    }
+
+    if (riderWatchers.current[order.riderId]) {
+      navigator.geolocation.clearWatch(riderWatchers.current[order.riderId]);
+    }
+
+    const watchId = navigator.geolocation.watchPosition((position) => {
+      const riderPosition = {
+        lat: position.coords.latitude,
+        lng: position.coords.longitude
+      };
+      const remainingKm = distanceKm(riderPosition, orderDestination(order));
+
+      updateRiderLocation(order.riderId, riderPosition);
+      setOrders((current) =>
+        current.map((item) => {
+          if (item.id !== orderId) return item;
+          return { ...item, status: remainingKm <= 0.08 ? "Delivered" : "On the way" };
+        })
+      );
+
+      if (remainingKm <= 0.08) {
+        navigator.geolocation.clearWatch(watchId);
+        delete riderWatchers.current[order.riderId];
+      }
+    }, () => {
+      setDispatchMessage({ type: "error", text: "GPS permission was denied or unavailable on this device." });
+    }, {
+      enableHighAccuracy: true,
+      timeout: 12000,
+      maximumAge: 0
+    });
+
+    riderWatchers.current[order.riderId] = watchId;
+    setDispatchMessage({ type: "success", text: "Live rider GPS is active. ETA will reduce as the rider gets closer." });
   }
 
   return (
     <main className="app-shell">
       <header className="topbar">
+        <div className="brand-mark"><Flame size={26} /></div>
         <div>
-          <h1>Gas supply in Zanzibar</h1>
+          <p className="eyebrow">GasFlow dispatch network</p>
+          <h1>Fast gas delivery across stores</h1>
+        </div>
+        <div className="manager-card">
+          <ShieldCheck size={20} />
+          <span>Customer app</span>
+          <strong>Order and track gas</strong>
         </div>
       </header>
 
-      <nav className="view-tabs" aria-label="Process views">
+      <nav className="view-tabs" aria-label="Main views">
         {[
-          ["customer", "Phone Order"],
-          ["depot", "Store Dashboard"],
-          ["admin", "Admin Panel"],
-          ["process", "Process Check"]
+          ["dispatch", "Place order"],
+          ["tracking", "Track order"],
+          ["rider", "Rider app"],
+          ["manager", "Manager board"],
+          ["stores", "Across stores"]
         ].map(([id, label]) => (
-          <button
-            className={activeView === id ? "active" : ""}
-            key={id}
-            onClick={() => setActiveView(id)}
-          >
+          <button key={id} className={view === id ? "active" : ""} onClick={() => setView(id)}>
             {label}
           </button>
         ))}
       </nav>
 
-      {activeView === "customer" && (
-        <section className="workspace two-column">
-          <div className="panel process-panel">
+      {view === "dispatch" && (
+        <section className="workspace dispatch-grid">
+          <div className="panel">
             <div className="section-heading">
               <div>
-                <p className="eyebrow">Fast dispatch overview</p>
-                <h2>Follow the route from gas type to delivery</h2>
+                <p className="eyebrow">Customer problem solved here</p>
+                <h2>Customer service order desk</h2>
+              </div>
+              <span className="status-pill">
+                <Clock3 size={16} />
+                {canMatchStore ? "Store match ready" : hasMappedDeliveryPlace ? "Choose gas type" : "Waiting for customer location"}
+              </span>
+            </div>
+
+            <div className="order-form">
+              <label>
+                Customer name
+                <input value={form.customer} onChange={(event) => updateForm("customer", event.target.value)} placeholder="Example: Amina Juma" />
+              </label>
+              <label>
+                Phone number
+                <TanzaniaPhoneInput value={form.phone} onChange={(value) => updateForm("phone", value)} />
+              </label>
+              <label>
+                Delivery zone
+                <select value={form.zone} onChange={(event) => updateForm("zone", event.target.value)}>
+                  <option value="">Choose delivery zone</option>
+                  {zones.map((zone) => <option key={zone}>{zone}</option>)}
+                </select>
+              </label>
+              <label>
+                Exact address
+                <input value={form.address} onChange={(event) => updateForm("address", event.target.value)} placeholder="Street, shop, landmark, or house number" />
+              </label>
+              <button className="ghost-action location-action" type="button" onClick={useCustomerCurrentLocation} disabled={isSubmittingOrder}>
+                <MapPin size={17} /> Use my current location
+              </button>
+              <label>
+                Gas type
+                <select value={form.cylinder} onChange={(event) => updateForm("cylinder", event.target.value)}>
+                  <option value="">Choose gas type</option>
+                  {cylinderTypes.map((item) => <option value={item.id} key={item.id}>{item.label}</option>)}
+                </select>
+              </label>
+              <label>
+                Notes
+                <input value={form.notes} onChange={(event) => updateForm("notes", event.target.value)} placeholder="Empty cylinder exchange, urgent, call before arrival" />
+              </label>
+              <div className="quantity-card">
+                <span>Quantity</span>
+                <button onClick={() => updateForm("quantity", Math.max(1, form.quantity - 1))} aria-label="Decrease quantity"><Minus size={18} /></button>
+                <strong>{form.quantity}</strong>
+                <button onClick={() => updateForm("quantity", form.quantity + 1)} aria-label="Increase quantity"><Plus size={18} /></button>
               </div>
             </div>
-            <div className="delivery-briefing">
-              <div className="briefing-card">
-                <p className="eyebrow">Live dispatch summary</p>
-                <h3>Nearby stores and riders</h3>
-                <div className="briefing-stats">
-                  <div>
-                    <strong>{depots.length}</strong>
-                    <span>Nearby gas stores</span>
-                  </div>
-                  <div>
-                    <strong>{riders.length}</strong>
-                    <span>Company riders</span>
-                  </div>
-                  <div>
-                    <strong>{riders.filter((rider) => rider.status === "Available").length}</strong>
-                    <span>Available now</span>
-                  </div>
+
+            <div className="payment-panel">
+              <div className="payment-heading">
+                <div>
+                  <p className="eyebrow">Payment confirmation</p>
+                  <h3>Choose how the customer will pay</h3>
                 </div>
+                <WalletCards size={22} />
               </div>
-              <div className="briefing-card compact-card">
-                <p className="eyebrow">Assigned rider</p>
-                <h3>{selectedRider?.name || "No rider"}</h3>
-                <p>{selectedRider?.vehicleType} • {selectedRider?.vehicleNumber}</p>
-                <p>{selectedRider?.phone}</p>
-              </div>
-            </div>
-            <div className="store-list">
-              {depots.map((store) => (
-                <button
-                  key={store.name}
-                  className={store.name === depot.name ? "store-chip active" : "store-chip"}
-                  onClick={() => updateDepot(store)}
-                  type="button"
-                >
-                  <strong>{store.name}</strong>
-                  <span>{store.eta} min • {store.stock} cylinders</span>
-                </button>
-              ))}
-            </div>
-            <div className="rider-list">
-              {availableRiders.map((rider) => (
-                <button
-                  key={rider.id}
-                  className={selectedRider?.id === rider.id ? "rider-chip active" : "rider-chip"}
-                  onClick={() => setSelectedRiderId(rider.id)}
-                  type="button"
-                >
-                  <div>
-                    <strong>{rider.name}</strong>
-                    <span>{rider.vehicleType} • {rider.vehicleNumber}</span>
-                  </div>
-                  <small>{rider.eta} min away</small>
-                </button>
-              ))}
-            </div>
-            <div className="stepper" aria-label="Customer ordering steps">
-              {customerSteps.map((item, index) => {
-                const Icon = item.icon;
-                return (
+              <div className="payment-options">
+                {paymentMethods.map((method) => (
                   <button
-                    className={`step-dot ${index === step ? "active" : ""} ${index < step ? "done" : ""}`}
-                    key={item.title}
-                    onClick={() => setStep(index)}
+                    className={form.payment === method.id ? "payment-option active" : "payment-option"}
+                    key={method.id}
+                    onClick={() => updateForm("payment", method.id)}
+                    type="button"
                   >
-                    <span><Icon size={17} /></span>
-                    <strong>{item.title}</strong>
+                    <strong>{method.name}</strong>
+                    <span>{method.id === "cash" ? "Collect on delivery" : "Paid before dispatch"}</span>
                   </button>
-                );
-              })}
+                ))}
+              </div>
+              <div className="payment-detail">
+                {selectedPayment ? (
+                  <>
+                    <div>
+                      <span>{selectedPayment.accountLabel}</span>
+                      <strong>{selectedPayment.accountValue}</strong>
+                    </div>
+                    <p>{selectedPayment.instruction}</p>
+                  </>
+                ) : (
+                  <p>Choose a payment method before placing the order.</p>
+                )}
+              </div>
+              {selectedPayment && selectedPayment.id !== "cash" && (
+                <div className="payment-fields">
+                  <label>
+                    Payment phone
+                    <TanzaniaPhoneInput value={form.paymentPhone || form.phone} onChange={(value) => updateForm("paymentPhone", value)} />
+                  </label>
+                  <label>
+                    {selectedPayment.referenceLabel}
+                    <input
+                      value={form.paymentReference}
+                      onChange={(event) => updateForm("paymentReference", event.target.value)}
+                      placeholder="Example: QG45T7K2"
+                    />
+                  </label>
+                </div>
+              )}
+              {selectedPayment?.id === "cash" && (
+                <div className="cash-warning">
+                  <AlertTriangle size={18} />
+                  <span>Cash orders dispatch as cash pending. Manager must confirm rider collection after delivery.</span>
+                </div>
+              )}
             </div>
-            <CustomerStep
-              step={step}
-              gasType={gasType}
-              size={size}
-              quantity={quantity}
-              callerName={callerName}
-              callerPhone={callerPhone}
-              callerNotes={callerNotes}
-              depot={depot}
-              payment={payment}
-              paymentStatus={paymentStatus}
-              paymentReference={paymentReference}
-              paymentPhone={paymentPhone}
-              paymentProof={paymentProof}
-              paymentError={paymentError}
-              deliveredTo={deliveredTo}
-              destination={destination}
-              mapView={mapView}
-              googleUrl={googleUrl}
-              osmUrl={osmUrl}
-              trackingStage={trackingStage}
-              trackingCopy={trackingCopy}
-              now={now}
-              contactPhone={CONTACT_PHONE}
-              contactDisplay={CONTACT_DISPLAY}
-              riderName={riderName}
-              riderPhone={riderPhone}
-              vehicleType={vehicleType}
-              vehicleNumber={vehicleNumber}
-              total={total}
-              onGasType={updateGasType}
-              onSize={setSize}
-              onQuantity={setQuantity}
-              onCallerName={setCallerName}
-              onCallerPhone={setCallerPhone}
-              onCallerNotes={setCallerNotes}
-              onDepot={updateDepot}
-              onPayment={updatePayment}
-              onPaymentConfirm={confirmPayment}
-              onPaymentPhone={setPaymentPhone}
-              onPaymentProof={setPaymentProof}
-              onDeliveredTo={setDeliveredTo}
-              onRiderName={setRiderName}
-              onRiderPhone={setRiderPhone}
-              onVehicleType={setVehicleType}
-              onVehicleNumber={setVehicleNumber}
-              onTrackingStage={updateTrackingStage}
-            />
-            <div className="step-actions">
-              <button className="icon-button" onClick={() => setStep(Math.max(0, step - 1))} aria-label="Previous step">
-                <ChevronLeft size={18} />
-              </button>
-              <button className="primary-action" onClick={() => setStep(Math.min(customerSteps.length - 1, step + 1))}>
-                Next check <ChevronRight size={18} />
+
+            <div className="checkout-row">
+              <div>
+                <span>Total</span>
+                <strong>{money((selectedCylinder?.price || 0) * form.quantity)}</strong>
+              </div>
+              <button className="primary-action" onClick={placeOrder} disabled={isSubmittingOrder}>
+                <Send size={18} /> {isSubmittingOrder ? "Finding map..." : "Place order"}
               </button>
             </div>
+            {dispatchMessage.text && (
+              <div className={`dispatch-feedback ${dispatchMessage.type}`}>
+                {dispatchMessage.type === "success" ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
+                <span>{dispatchMessage.text}</span>
+              </div>
+            )}
           </div>
 
-          <aside className="panel summary-panel">
-            <p className="eyebrow">Live order preview</p>
-            <h2>{gasType.name}</h2>
-            <ExactMap
-              className="summary-map"
-              title="Zanzibar LPG store delivery map"
-              mapView={mapView}
-              depot={depot}
-              destination={destination}
-              metaTitle={trackingCopy.label}
-            />
-            <div className="selected-rider-card">
-              <p className="eyebrow">Assigned rider</p>
-              <h3>{selectedRider?.name || "No rider"}</h3>
-              <p>{selectedRider?.phone}</p>
-              <p>{selectedRider?.vehicleType} • {selectedRider?.vehicleNumber}</p>
-            </div>
-            <dl className="order-summary">
-              <div><dt>Size</dt><dd>{size}</dd></div>
-              <div><dt>Quantity</dt><dd>{quantity}</dd></div>
-              <div><dt>Customer</dt><dd>{callerName || "Not recorded"}</dd></div>
-              <div><dt>Phone</dt><dd>{callerPhone || "Not recorded"}</dd></div>
-              <div><dt>Store</dt><dd>{depot.name}</dd></div>
-              <div><dt>Direction</dt><dd>{trackingCopy.eta}</dd></div>
-              <div><dt>Payment</dt><dd>{payment.name}</dd></div>
-              <div><dt>Status</dt><dd>{paymentStatus === "paid" ? "Paid" : paymentStatus === "reserved" ? "Cash reserved" : "Not paid"}</dd></div>
-              <div><dt>Contact</dt><dd>{CONTACT_DISPLAY}</dd></div>
-              <div><dt>Total</dt><dd>{money(total)}</dd></div>
-            </dl>
+          <aside className="panel recommendation-panel">
+            {!canMatchStore && (
+              <div className="service-waiting">
+                <Clock3 size={34} />
+                <p className="eyebrow">Customer service</p>
+                <h2>{hasMappedDeliveryPlace ? "Choose gas type" : "No store selected yet"}</h2>
+                <p>{hasMappedDeliveryPlace ? "Select the gas type. The app will then choose the nearest store that can serve the order." : "Use my current location first. The app will not choose any store before the real location is available."}</p>
+              </div>
+            )}
+            {canMatchStore && bestStore && (
+              <>
+                <p className="eyebrow">Dispatch match</p>
+                <h2>{bestStore.name}</h2>
+                <div className="route-box">
+                  <Store size={22} />
+                  <span>{bestStore.zone}</span>
+                  <Route size={20} />
+                  <span>{form.zone || "Current location"}</span>
+                </div>
+                <div className="eta-number">
+                  <strong>Route pending</strong>
+                  <span>ETA starts after rider shares live GPS</span>
+                </div>
+                <div className="assignment-card">
+                  <Bike size={20} />
+                  <div>
+                    <strong>{pickRider(bestStore.id).name}</strong>
+                    <span>{pickRider(bestStore.id).vehicle}</span>
+                  </div>
+                </div>
+                <div className="mini-list">
+                  {storeOptions.slice(0, 4).map((store) => (
+                    <div className={store.canServe ? "mini-row" : "mini-row blocked"} key={store.id}>
+                      <span>{store.name}</span>
+                      <strong>{store.canServe ? "Available" : "No stock"}</strong>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </aside>
         </section>
       )}
 
-      {activeView === "depot" && <DepotDashboard currentOrder={currentOrder} riders={riders} availableRiders={availableRiders} />}
-      {activeView === "admin" && (
-        <AdminPanel
-          currentOrder={currentOrder}
-          mapView={mapView}
-          depot={depot}
-          destination={destination}
-          riders={riders}
-          availableRiders={availableRiders}
+      {view === "manager" && (
+        <section className="workspace manager-grid">
+          <Metric icon={PackageCheck} label="Active orders" value={activeOrders.length} />
+          <Metric icon={CheckCircle2} label="Delivered today" value={deliveredToday} />
+          <Metric icon={WalletCards} label="Revenue today" value={money(revenue)} />
+          <Metric icon={AlertTriangle} label="Low stock alerts" value={lowStockStores.length} />
+
+          <div className="panel orders-panel">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Dispatch queue</p>
+                <h2>Orders that must not be late</h2>
+              </div>
+              <button className="ghost-action" onClick={resetDemo}><RefreshCcw size={16} /> Reset demo</button>
+            </div>
+            <OrderTable orders={orders} onAdvance={advanceOrder} />
+          </div>
+        </section>
+      )}
+
+      {view === "rider" && (
+        <RiderApp
+          orders={orders}
+          riderLocations={riderLocations}
+          onUseGps={useRiderBrowserGps}
+          onAdvance={advanceOrder}
         />
       )}
-      {activeView === "process" && <ProcessCheck currentOrder={currentOrder} />}
+
+      {view === "stores" && (
+        <section className="workspace stores-grid">
+          {stores.map((store) => (
+            <StoreCard key={store.id} store={store} />
+          ))}
+        </section>
+      )}
+
+      {view === "tracking" && (
+        <section className="workspace customer-tracking-layout">
+          <div className="tracking-experience">
+            {trackingOrder && <LiveMap order={trackingOrder} riderLocation={riderLocations[trackingOrder.riderId]} />}
+            {!trackingOrder && <div className="empty-state"><CheckCircle2 size={28} /> Place an order to track your gas.</div>}
+          </div>
+        </section>
+      )}
     </main>
   );
 }
 
-function AuthPage({ onAuth }) {
-  const [mode, setMode] = useState("login");
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [verification, setVerification] = useState("");
-  const [captcha, setCaptcha] = useState(() => captchaChallenge());
-  const [captchaAnswer, setCaptchaAnswer] = useState("");
-  const [pendingReset, setPendingReset] = useState(null);
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
-
-  function resetFeedback(nextMode) {
-    setMode(nextMode);
-    setMessage("");
-    setError("");
-    setPassword("");
-    setConfirmPassword("");
-    setShowPassword(false);
-    setShowConfirmPassword(false);
-    setVerification("");
-    setCaptcha(captchaChallenge());
-    setCaptchaAnswer("");
-    setPendingReset(null);
-  }
-
-  function cleanEmail() {
-    return email.trim().toLowerCase();
-  }
-
-  async function submitAuth(event) {
-    event.preventDefault();
-    setMessage("");
-    setError("");
-
-    const normalizedEmail = cleanEmail();
-    const users = readStoredUsers();
-    const existingUser = users.find((user) => user.email === normalizedEmail);
-
-    if (!normalizedEmail || !isValidEmail(normalizedEmail)) {
-      setError("Enter a valid email address.");
-      return;
-    }
-
-    if (mode === "login") {
-      if (!password) {
-        setError("Enter email and password.");
-        return;
-      }
-
-      if (!existingUser || existingUser.password !== password) {
-        setError("Email or password is incorrect.");
-        return;
-      }
-
-      onAuth({ name: existingUser.name, email: existingUser.email });
-      return;
-    }
-
-    if (mode === "register") {
-      if (!password) {
-        setError("Enter email and password.");
-        return;
-      }
-
-      if (!name.trim()) {
-        setError("Enter your name.");
-        return;
-      }
-
-      if (password.length < 6) {
-        setError("Password must be at least 6 characters.");
-        return;
-      }
-
-      if (password !== confirmPassword) {
-        setError("Passwords do not match.");
-        return;
-      }
-
-      if (existingUser) {
-        setError("This email is already registered. Login instead.");
-        return;
-      }
-
-      if (captchaAnswer.trim().toUpperCase() !== captcha.answer) {
-        setError("Complete the CAPTCHA correctly.");
-        setCaptcha(captchaChallenge());
-        setCaptchaAnswer("");
-        return;
-      }
-
-      const newUser = {
-        name: name.trim(),
-        email: normalizedEmail,
-        phone: phone.trim(),
-        password,
-        verified: true
-      };
-
-      writeStoredUsers([...users, newUser]);
-      onAuth({ name: newUser.name, email: newUser.email });
-      return;
-    }
-
-    if (!existingUser) {
-      setError("No account found with this email.");
-      return;
-    }
-
-    if (!pendingReset || pendingReset.email !== normalizedEmail) {
-      const code = verificationCode();
-      const emailResult = await sendVerificationEmail(normalizedEmail, code, "reset password");
-
-      if (!emailResult.ok) {
-        setError(emailResult.error);
-        return;
-      }
-
-      setPendingReset({
-        email: normalizedEmail,
-        code
-      });
-      setMessage(`Verification code sent to ${normalizedEmail}. Check your email.`);
-      return;
-    }
-
-    if (verification.trim() !== pendingReset.code) {
-      setError("Verification code is incorrect.");
-      return;
-    }
-
-    if (password.length < 6) {
-      setError("New password must be at least 6 characters.");
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setError("Passwords do not match.");
-      return;
-    }
-
-    writeStoredUsers(users.map((user) => (
-      user.email === normalizedEmail ? { ...user, password } : user
-    )));
-    setMessage("Password reset. You can login now.");
-    setMode("login");
-    setPassword("");
-    setConfirmPassword("");
-    setVerification("");
-    setPendingReset(null);
-  }
-
-  const actionLabel = mode === "login"
-    ? "Login"
-    : mode === "register"
-      ? "Register"
-      : pendingReset ? "Verify and reset password" : "Send verification email";
-  const authTitle = mode === "login" ? "Login" : mode === "register" ? "Register" : "Forgot password";
+function LiveMap({ order, riderLocation }) {
+  const store = stores.find((item) => item.id === order.storeId) || stores[0];
+  const rider = riders.find((item) => item.id === order.riderId) || riders[0];
+  const cylinder = cylinderTypes.find((item) => item.id === order.cylinder);
+  const payment = getPaymentMethod(order.payment);
+  const destination = orderDestination(order);
+  const hasLiveGps = Boolean(riderLocation);
+  const liveRiderLocation = riderLocation || { lat: store.lat, lng: store.lng };
+  const mapView = createTrackingMapView(store, destination, liveRiderLocation);
+  const etaMinutes = order.status === "Delivered" ? 0 : deliveryMinutesEstimate(liveRiderLocation, destination);
+  const etaSourceLabel = hasLiveGps ? "from rider" : "from store";
+  const etaLabel = order.status === "Delivered" ? "Delivered" : hasLiveGps ? "Live GPS" : "GPS pending";
+  const pickupLabel = "Pickup";
+  const dropoffLabel = order.status === "Delivered" ? "Delivered" : "Dropoff";
+  const statusTitle = order.status === "Delivered" ? "Gas delivered" : hasLiveGps ? "Your gas is on the way" : "Waiting for rider location";
+  const riderInitials = rider.name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("");
 
   return (
-    <main className={`auth-shell auth-shell-${mode}`}>
-      <section className={`auth-panel auth-panel-${mode}`}>
-        <div className="auth-brand">
-          <span><Store size={24} /></span>
-          <h1>Gas supply in Zanzibar</h1>
+    <div className="live-map-stack">
+      <div className="real-tracking-map">
+        <div className="map-tile-grid" aria-hidden="true">
+          {mapView.tiles.map((tile) => (
+            <img
+              className="map-tile"
+              key={tile.key}
+              src={tile.url}
+              style={tile.style}
+              alt=""
+              onError={(event) => {
+                event.currentTarget.style.visibility = "hidden";
+              }}
+            />
+          ))}
+        </div>
+        <div className="map-watermark">Live gas tracking</div>
+        <svg className="route-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+          <path className="route-shadow" d={mapView.routePath} />
+          <path className="route-main" d={mapView.routePath} />
+        </svg>
+        <div className="map-eta-card">
+          <span>{order.status === "Delivered" ? "Arrived" : "Estimated arrival"}</span>
+          <strong>{order.status === "Delivered" ? "Delivered" : `${etaMinutes} min`}</strong>
+          {order.status !== "Delivered" && <small>{etaSourceLabel}</small>}
+        </div>
+        <span className="route-label pickup-label" style={mapView.storePoint}>{pickupLabel}</span>
+        <span className="route-label dropoff-label" style={mapView.destinationPoint}>{dropoffLabel}</span>
+        <span className="map-pin store-pin" style={mapView.storePoint}><Warehouse size={15} /></span>
+        <span className="map-pin customer-pin" style={mapView.destinationPoint}><MapPin size={15} /></span>
+        <span className="rider-pin" style={mapView.riderPoint}><Truck size={17} /></span>
+      </div>
+      <div className="tracking-bottom-sheet">
+        <span className="sheet-handle" />
+        <div className="tracking-hero-row">
+          <div>
+            <p className="eyebrow">Gas delivery</p>
+            <h2>{statusTitle}</h2>
+            <span>{order.status === "Delivered" ? "Thank you for ordering with GasFlow." : hasLiveGps ? "Rider live location is active." : "Rider has not shared live GPS yet."}</span>
+          </div>
+          <strong className="eta-badge">{etaLabel}</strong>
         </div>
 
-        <h2 className="auth-title">{authTitle}</h2>
+        <div className="tracking-steps">
+          {deliveryStages.slice(1).map((stage) => (
+            <span className={deliveryStages.indexOf(stage) <= deliveryStages.indexOf(order.status) ? "active" : ""} key={stage}>
+              {stage}
+            </span>
+          ))}
+        </div>
 
-        <form className={`auth-form auth-form-${mode}`} onSubmit={submitAuth}>
-          {mode === "register" && (
-            <label className="field-label">
-              Full name
-              <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Example: Amina Juma" />
-            </label>
-          )}
-
-          <label className="field-label">
-            Email
-            <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@example.com" type="email" />
-          </label>
-
-          {mode === "register" && (
-            <label className="field-label">
-              Phone
-              <TanzaniaPhoneInput value={phone} onChange={setPhone} />
-            </label>
-          )}
-
-          {(mode !== "forgot" || pendingReset) && (
-            <label className="field-label">
-              {mode === "forgot" ? "New password" : "Password"}
-              <span className="password-input">
-                <input value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 6 characters" type={showPassword ? "text" : "password"} />
-                <button type="button" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? "Hide password" : "Show password"}>
-                  {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
-                </button>
-              </span>
-            </label>
-          )}
-
-          {mode === "register" && (
-            <label className="field-label">
-              Confirm password
-              <span className="password-input">
-                <input value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Repeat password" type={showConfirmPassword ? "text" : "password"} />
-                <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}>
-                  {showConfirmPassword ? <EyeOff size={17} /> : <Eye size={17} />}
-                </button>
-              </span>
-            </label>
-          )}
-
-          {mode === "register" && (
-            <label className="field-label">
-              CAPTCHA
-              <span className="captcha-row">
-                <strong aria-label="CAPTCHA code">
-                  {captcha.question.split("").map((character, index) => (
-                    <span key={`${character}-${index}`}>{character}</span>
-                  ))}
-                </strong>
-                <input value={captchaAnswer} onChange={(event) => setCaptchaAnswer(event.target.value)} placeholder="6 letters/numbers" autoCapitalize="characters" maxLength={6} />
-                <button className="icon-button" type="button" onClick={() => {
-                  setCaptcha(captchaChallenge());
-                  setCaptchaAnswer("");
-                }} aria-label="Refresh CAPTCHA">
-                  <RefreshCcw size={17} />
-                </button>
-              </span>
-            </label>
-          )}
-
-          {mode === "forgot" && pendingReset && (
-            <label className="field-label">
-              Verification code
-              <input value={verification} onChange={(event) => setVerification(event.target.value)} placeholder="Enter the 6-digit code" inputMode="numeric" />
-            </label>
-          )}
-
-          {mode === "forgot" && pendingReset && (
-            <label className="field-label">
-              Confirm new password
-              <span className="password-input">
-                <input value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Repeat new password" type={showConfirmPassword ? "text" : "password"} />
-                <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}>
-                  {showConfirmPassword ? <EyeOff size={17} /> : <Eye size={17} />}
-                </button>
-              </span>
-            </label>
-          )}
-
-          <div className={`auth-feedback ${!error && !message ? "empty" : ""}`}>
-            {error && <div className="payment-error">{error}</div>}
-            {message && <div className="payment-success"><CheckCircle2 size={20} /><span><strong>{message}</strong></span></div>}
+        <div className="rider-card">
+          <span className="rider-avatar">{riderInitials}</span>
+          <div>
+            <strong>{rider.name}</strong>
+            <span>{rider.vehicle}</span>
           </div>
+          <a className="round-action" href={`tel:${rider.phone}`} aria-label="Call rider"><Phone size={17} /></a>
+          <a className="round-action" href={`sms:${rider.phone}`} aria-label="Message rider"><MessageCircle size={17} /></a>
+        </div>
 
-          <button className="primary-action full-width" type="submit">
-            {mode === "login" && <KeyRound size={17} />}
-            {mode === "register" && <UserPlus size={17} />}
-            {mode === "forgot" && <Mail size={17} />}
-            {actionLabel}
-          </button>
+        <div className="customer-summary-list compact">
+          <div><span>Order</span><strong>{order.id}</strong></div>
+          <div><span>Gas</span><strong>{order.quantity} x {cylinder?.label}</strong></div>
+          <div><span>Deliver to</span><strong>{order.mapAddress || `${order.address}, ${order.zone}`}</strong></div>
+          <div><span>Payment</span><strong>{payment.name} - {order.paymentStatus}</strong></div>
+          <div><span>From</span><strong>{store.name}</strong></div>
+        </div>
 
-          <div className="auth-switch">
-            <button type="button" onClick={() => resetFeedback(mode === "register" ? "login" : "register")}>
-              {mode === "register" ? "Login" : "Register"}
-            </button>
-            <button type="button" onClick={() => resetFeedback(mode === "forgot" ? "login" : "forgot")}>
-              {mode === "forgot" ? "Login" : "Forgot password"}
-            </button>
-          </div>
-        </form>
-      </section>
-    </main>
+        <a className="primary-action map-link" href={mapView.directionsUrl} target="_blank" rel="noreferrer">
+          <Route size={17} /> Open route in Google Maps
+        </a>
+      </div>
+    </div>
   );
 }
 
-function CustomerStep(props) {
-  const {
-    step,
-    gasType,
-    size,
-    quantity,
-    callerName,
-    callerPhone,
-    callerNotes,
-    depot,
-    payment,
-    paymentStatus,
-    paymentReference,
-    paymentPhone,
-    paymentProof,
-    paymentError,
-    deliveredTo,
-    destination,
-    mapView,
-    googleUrl,
-    osmUrl,
-    trackingStage,
-    trackingCopy,
-    now,
-    contactPhone,
-    contactDisplay,
-    riderName,
-    riderPhone,
-    vehicleType,
-    vehicleNumber,
-    total,
-    onGasType,
-    onSize,
-    onQuantity,
-    onCallerName,
-    onCallerPhone,
-    onCallerNotes,
-    onDepot,
-    onPayment,
-    onPaymentConfirm,
-    onPaymentPhone,
-    onPaymentProof,
-    onDeliveredTo,
-    onRiderName,
-    onRiderPhone,
-    onVehicleType,
-    onVehicleNumber,
-    onTrackingStage
-  } = props;
+function RiderApp({ orders, riderLocations, onUseGps, onAdvance }) {
+  const activeRiderOrders = orders.filter((order) => order.status !== "Delivered");
 
-  if (step === 0) {
-    return (
-      <div className="call-form">
-        <label className="field-label">
-          Customer name
-          <input
-            value={callerName}
-            onChange={(event) => onCallerName(event.target.value)}
-            placeholder="Example: Amina Juma"
-          />
-        </label>
-        <label className="field-label">
-          Customer phone
-          <TanzaniaPhoneInput value={callerPhone} onChange={onCallerPhone} />
-        </label>
-        <label className="field-label full-span">
-          Call notes
-          <input
-            value={callerNotes}
-            onChange={(event) => onCallerNotes(event.target.value)}
-            placeholder="Example: needs 15kg cylinder today, pay by M-Pesa"
-          />
-        </label>
+  return (
+    <section className="workspace rider-app">
+      <div className="panel">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Rider GPS</p>
+            <h2>Update live delivery location</h2>
+          </div>
+        </div>
+        {!activeRiderOrders.length && (
+          <div className="empty-state"><Truck size={28} /> No active delivery assigned.</div>
+        )}
+        <div className="rider-order-list">
+          {activeRiderOrders.map((order) => {
+            const rider = riders.find((item) => item.id === order.riderId);
+            const store = stores.find((item) => item.id === order.storeId);
+            const location = riderLocations[order.riderId];
+            return (
+              <article className="rider-order-card" key={order.id}>
+                <div>
+                  <span className="order-id">{order.id}</span>
+                  <h3>{order.address}, {order.zone}</h3>
+                  <p>{rider?.name} - {rider?.vehicle}</p>
+                  <p>Pickup: {store?.name}</p>
+                  <p>{location ? `Last GPS: ${location.lat.toFixed(5)}, ${location.lng.toFixed(5)}` : "GPS not shared yet"}</p>
+                </div>
+                <div className="rider-actions">
+                  <button className="primary-action" onClick={() => onUseGps(order.id)}>
+                    <MapPin size={17} /> Share my GPS
+                  </button>
+                  <button className="ghost-action" onClick={() => onAdvance(order.id)}>
+                    <CheckCircle2 size={17} /> Next status
+                  </button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
       </div>
-    );
+    </section>
+  );
+}
+
+function OrderTable({ orders, onAdvance, compact = false }) {
+  if (!orders.length) {
+    return <div className="empty-state"><CheckCircle2 size={28} /> All deliveries are complete.</div>;
   }
 
-  if (step === 1) {
-    return (
-      <div className="choice-grid">
-        {gasTypes.map((item) => (
-          <button className={`choice-card ${gasType.id === item.id ? "selected" : ""}`} key={item.id} onClick={() => onGasType(item)}>
-            <strong>{item.name}</strong>
-            <span>{item.note}</span>
-            <b>{money(item.price)}</b>
-          </button>
+  return (
+    <div className={compact ? "order-stack compact" : "order-stack"}>
+      {orders.map((order) => {
+        const store = stores.find((item) => item.id === order.storeId);
+        const rider = riders.find((item) => item.id === order.riderId);
+        const cylinder = cylinderTypes.find((item) => item.id === order.cylinder);
+        const payment = getPaymentMethod(order.payment);
+        const stageIndex = deliveryStages.indexOf(order.status);
+        return (
+          <article className="order-card" key={order.id}>
+            <div className="order-main">
+              <span className="order-id">{order.id}</span>
+              <strong>{order.customer}</strong>
+              <span>{order.phone}</span>
+            </div>
+            <div>
+              <strong>{order.quantity} x {cylinder?.label}</strong>
+              <span>{order.address}, {order.zone}</span>
+            </div>
+            <div>
+              <strong>{payment.name} - {order.paymentStatus}</strong>
+              <span>{order.paymentReference}</span>
+            </div>
+            <div>
+              <strong>{store?.name}</strong>
+              <span>{rider?.name} - {rider?.vehicle}</span>
+            </div>
+            <div className="progress-cell">
+              <span className="status-pill">{order.status}</span>
+              <div className="stage-bar" style={{ "--stage": `${Math.max(12, (stageIndex / (deliveryStages.length - 1)) * 100)}%` }}><span /></div>
+            </div>
+            <button className="primary-action small" onClick={() => onAdvance(order.id)} disabled={order.status === "Delivered"}>
+              Next status
+            </button>
+          </article>
+        );
+      })}
+    </div>
+  );
+}
+
+function StoreCard({ store }) {
+  const totalStock = Object.values(store.stock).reduce((sum, value) => sum + value, 0);
+  const low = Object.entries(store.stock).filter(([, value]) => value <= 3).map(([key]) => key);
+
+  return (
+    <article className="store-card">
+      <div className="store-card-head">
+        <span><Store size={20} /></span>
+        <div>
+          <strong>{store.name}</strong>
+          <small>{store.zone}</small>
+        </div>
+      </div>
+      <div className="store-metrics">
+        <div><span>Stock</span><strong>{totalStock}</strong></div>
+        <div><span>Riders</span><strong>{store.riders}</strong></div>
+        <div><span>Area</span><strong>{store.zone}</strong></div>
+      </div>
+      <div className="stock-lines">
+        {Object.entries(store.stock).map(([key, value]) => (
+          <div key={key}>
+            <span>{key}</span>
+            <strong>{value}</strong>
+          </div>
         ))}
       </div>
-    );
-  }
-
-  if (step === 2) {
-    return (
-      <div className="flow-content">
-        <div className="size-row">
-          {gasType.options.map((option, index) => (
-            <button className={`size-chip ${size === option ? "selected" : ""}`} key={option} onClick={() => onSize(option)}>
-              {option}
-              {index === 1 && <span>Popular</span>}
-            </button>
-          ))}
-        </div>
-        <div className="quantity-control">
-          <button className="icon-button" onClick={() => onQuantity(Math.max(1, quantity - 1))} aria-label="Decrease quantity"><Minus size={18} /></button>
-          <strong>{quantity}</strong>
-          <button className="icon-button" onClick={() => onQuantity(quantity + 1)} aria-label="Increase quantity"><Plus size={18} /></button>
-        </div>
-      </div>
-    );
-  }
-
-  if (step === 3) {
-    return (
-      <div className="location-flow">
-        <label className="field-label">
-          Delivered to
-          <input
-            value={deliveredTo}
-            onChange={(event) => onDeliveredTo(event.target.value)}
-            placeholder="Example: Amina Juma, Bububu Cafe, or Stone Town shop"
-          />
-        </label>
-        <div className="field-label">
-          Taken from gas store
-        </div>
-        <div className="depot-list">
-          {depots.map((item) => (
-            <button className={`depot-row ${depot.name === item.name ? "selected" : ""}`} key={item.name} onClick={() => onDepot(item)}>
-              <span className="depot-marker"><Navigation size={18} /></span>
-              <span><strong>{item.name}</strong><small>{item.status} - ETA {item.eta} min - {item.route}</small></span>
-              <b>{item.stock} left</b>
-            </button>
-          ))}
-        </div>
-        <div className="route-card">
-          <Route size={21} />
-          <span>
-            <strong>Store to delivery route</strong>
-            <small>Gas is taken from {depot.name} and delivered to {destination.name}.</small>
-          </span>
-        </div>
-      </div>
-    );
-  }
-
-  if (step === 4) {
-    return (
-      <div className="payment-flow">
-        <div className="payment-grid">
-          {paymentMethods.map((item) => {
-            const Icon = item.icon;
-            return (
-              <button className={`payment-card ${payment.id === item.id ? "selected" : ""}`} key={item.id} onClick={() => onPayment(item)}>
-                <Icon size={24} />
-                <strong>{item.name}</strong>
-                <small>{item.id === "cash" ? "Pay rider on delivery" : "Record transaction reference"}</small>
-              </button>
-            );
-          })}
-        </div>
-        <div className="payment-terminal">
-          <div>
-            <p className="eyebrow">Payment terminal</p>
-            <h3>{payment.name}</h3>
-            <small>{payment.prompt}</small>
-          </div>
-          {payment.id !== "cash" && (
-            <div className="payment-form">
-              {payment.id !== "card" && (
-                <label className="field-label">
-                  Customer phone
-                  <TanzaniaPhoneInput value={paymentPhone} onChange={onPaymentPhone} />
-                </label>
-              )}
-              <label className="field-label">
-                {payment.id === "card" ? "Authorization reference" : "Transaction reference"}
-                <input
-                  value={paymentProof}
-                  onChange={(event) => onPaymentProof(event.target.value)}
-                  placeholder={payment.id === "card" ? "Example: AUTH-48291" : "Example: QG45T7K2"}
-                />
-              </label>
-            </div>
-          )}
-          {payment.id === "cash" && (
-            <div className="cash-note">
-              <Banknote size={20} />
-              <span>Cash will be collected by the rider on delivery. Store contact: {contactDisplay}.</span>
-            </div>
-          )}
-          <div className="terminal-row">
-            <span>Amount</span>
-            <strong>{money(total)}</strong>
-          </div>
-          <button className="primary-action full-width" onClick={onPaymentConfirm}>
-            {payment.id === "cash" ? "Reserve cash order" : "Record received payment"} <Send size={17} />
-          </button>
-          {paymentError && <div className="payment-error">{paymentError}</div>}
-          {paymentStatus !== "pending" && (
-            <div className="payment-success">
-              <CheckCircle2 size={20} />
-              <span>
-                <strong>{paymentStatus === "paid" ? "Payment confirmed" : "Cash order reserved"}</strong>
-                <small>Reference {paymentReference}</small>
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  if (step === 5) {
-    const trackingLocked = paymentStatus === "pending";
-    const riderInitials = riderName.trim()
-      ? riderName.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase()
-      : "RD";
-    const riderPhoneLink = riderPhone.trim() || contactPhone;
-    return (
-      <div className="tracking-card">
-        <div className="call-form">
-          <label className="field-label">
-            Rider name
-            <input value={riderName} onChange={(event) => onRiderName(event.target.value)} placeholder="Example: Joseph M." />
-          </label>
-          <label className="field-label">
-            Rider phone
-            <TanzaniaPhoneInput value={riderPhone} onChange={onRiderPhone} />
-          </label>
-          <label className="field-label">
-            Vehicle type
-            <input value={vehicleType} onChange={(event) => onVehicleType(event.target.value)} placeholder="Example: Motorcycle" />
-          </label>
-          <label className="field-label">
-            Vehicle number
-            <input value={vehicleNumber} onChange={(event) => onVehicleNumber(event.target.value)} placeholder="Example: ZNZ 123 AB" />
-          </label>
-        </div>
-        <div className="rider-strip">
-          <span className="avatar">{riderInitials}</span>
-          <span>
-            <strong>{riderName || "Transport not assigned"}</strong>
-            <small><Star size={14} fill="currentColor" /> {vehicleType || "Vehicle type not recorded"} {vehicleNumber && `- ${vehicleNumber}`} - {trackingCopy.label}</small>
-          </span>
-          <a className="icon-button" href={`tel:${riderPhoneLink}`} aria-label="Call rider"><Phone size={18} /></a>
-        </div>
-        <ExactMap
-          className="summary-map inline-map tracking-map"
-          title="Real delivery route map"
-          mapView={mapView}
-          depot={depot}
-          destination={destination}
-          metaTitle={trackingCopy.label}
-          routeProgress={trackingCopy.progress}
-        />
-        <div className="live-route-panel">
-          <div className="dispatch-status">
-            <div>
-              <span>Current rider position</span>
-              <strong>{trackingCopy.position}</strong>
-            </div>
-            <div>
-              <span>ETA</span>
-              <strong>{trackingCopy.eta}</strong>
-            </div>
-            <div>
-              <span>Estimated arrival</span>
-              <strong>{trackingCopy.arrival}</strong>
-            </div>
-          </div>
-          <div className="dispatch-progress" style={{ "--delivery-progress": `${trackingCopy.progress}%` }}>
-            <span />
-          </div>
-          <div className="terminal-row">
-            <span>Store: {depot.name}</span>
-            <strong>{trackingCopy.eta}</strong>
-          </div>
-          <div className="tracking-detail">
-            <MapPin size={18} />
-            <span>Delivery location: {destination.name}</span>
-          </div>
-          <div className="tracking-detail">
-            <Navigation size={18} />
-            <span>{trackingCopy.detail}</span>
-          </div>
-          <div className="tracking-detail">
-            <Clock3 size={18} />
-            <span>Manager updated: {arrivalTime(0, now)}</span>
-          </div>
-          <a className="contact-link" href={`tel:${riderPhoneLink}`}>
-            <Phone size={16} /> Call {riderPhone || contactDisplay}
-          </a>
-        </div>
-        <div className="tracking-stages">
-          {orderStages.map((stage, index) => (
-            <button
-              className={index <= trackingStage ? "stage active" : "stage"}
-              key={stage}
-              disabled
-            >
-              <span />
-              {stage}
-            </button>
-          ))}
-        </div>
-        {trackingLocked && (
-          <div className="payment-error">
-            Record mobile money payment or reserve cash order before dispatch tracking.
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <div className="delivered-panel">
-      <ReceiptText size={34} />
-      <h3>Delivery confirmed</h3>
-      <p>Digital receipt saved with customer, store, transport, and delivered time details.</p>
-      <div className="rating-row">
-        {[1, 2, 3, 4, 5].map((item) => <Star key={item} size={22} fill="currentColor" />)}
-      </div>
-    </div>
-  );
-}
-
-function ExactMap({ className, title, mapView, depot, destination, metaTitle, routeProgress = null }) {
-  const riderPoint = routeProgress === null ? null : {
-    left: `${mapView.routeLine.x1 + ((mapView.routeLine.x2 - mapView.routeLine.x1) * routeProgress) / 100}%`,
-    top: `${mapView.routeLine.y1 + ((mapView.routeLine.y2 - mapView.routeLine.y1) * routeProgress) / 100}%`
-  };
-
-  return (
-    <div className={`${className} real-map`}>
-      <iframe title={title} src={mapView.embedUrl} loading="lazy" />
-      <svg className="route-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-        <line
-          x1={mapView.routeLine.x1}
-          y1={mapView.routeLine.y1}
-          x2={mapView.routeLine.x2}
-          y2={mapView.routeLine.y2}
-        />
-      </svg>
-      <span className="exact-map-pin depot-pin" style={mapView.depotPoint}>
-        Store
-      </span>
-      <span className="exact-map-pin customer-pin" style={mapView.destinationPoint}>
-        Delivery
-      </span>
-      {riderPoint && (
-        <span className="rider-map-pin" style={riderPoint}>
-          <Truck size={15} />
-        </span>
-      )}
-      <div className="map-meta">
-        <strong>{metaTitle}</strong>
-        <span>Store: {depot.name}</span>
-        <span>Delivery location: {destination.name}</span>
-      </div>
-    </div>
-  );
-}
-
-function DepotDashboard({ currentOrder, riders, availableRiders }) {
-  return (
-    <section className="workspace depot-grid">
-      <div className="panel">
-        <div className="section-heading">
-          <p className="eyebrow">Zanzibar LPG Stores</p>
-          <h2>Current order</h2>
-        </div>
-        <div className="active-order">
-          <span>
-            <strong>{currentOrder.id}</strong>
-            <small>{currentOrder.customer} - {currentOrder.phone}</small>
-          </span>
-          <span>{currentOrder.product}</span>
-          <span>{currentOrder.destination}</span>
-          <span className="pill">{currentOrder.status}</span>
-          <b>{money(currentOrder.total)}</b>
-        </div>
-        <dl className="order-summary">
-          <div><dt>Payment</dt><dd>{currentOrder.payment}</dd></div>
-          <div><dt>Store</dt><dd>{currentOrder.store}</dd></div>
-          <div><dt>Delivered by</dt><dd>{currentOrder.deliveredBy}</dd></div>
-          <div><dt>Rider phone</dt><dd>{currentOrder.riderPhone}</dd></div>
-          <div><dt>Delivered time</dt><dd>{currentOrder.deliveredTime}</dd></div>
-          <div><dt>Reference</dt><dd>{currentOrder.reference}</dd></div>
-        </dl>
-      </div>
-      <div className="panel">
-        <div className="section-heading">
-          <p className="eyebrow">Stock control</p>
-          <h2>Cylinder availability</h2>
-        </div>
-        <div className="stock-list">
-          {stockRows.map((row) => (
-            <div className="stock-row" key={row.label}>
-              <div><strong>{row.label}</strong><span>{row.value} units</span></div>
-              <div className="stock-bar"><span style={{ width: `${row.level}%` }} /></div>
-            </div>
-          ))}
-        </div>
-      </div>
-      <div className="panel metric-band">
-        <Metric icon={CircleDollarSign} label="Daily revenue" value="TZS 1.24M" />
-        <Metric icon={Bike} label="Available riders" value={`${availableRiders.length}`} />
-        <Metric icon={ClipboardCheck} label="Company riders" value={`${riders.length}`} />
-      </div>
-    </section>
-  );
-}
-
-function AdminPanel({ currentOrder, mapView, depot, destination, riders, availableRiders }) {
-  return (
-    <section className="workspace admin-layout">
-      <div className="panel analytics-panel">
-        <div className="section-heading">
-          <p className="eyebrow">Admin control panel</p>
-          <h2>Store oversight</h2>
-        </div>
-        <ExactMap
-          className="summary-map admin-map"
-          title="Admin service area map"
-          mapView={mapView}
-          depot={depot}
-          destination={destination}
-          metaTitle="Active Zanzibar delivery route"
-        />
-        <dl className="order-summary admin-summary">
-          <div><dt>Customer</dt><dd>{currentOrder.customer}</dd></div>
-          <div><dt>Phone</dt><dd>{currentOrder.phone}</dd></div>
-          <div><dt>Store</dt><dd>{currentOrder.store}</dd></div>
-          <div><dt>Destination</dt><dd>{currentOrder.destination}</dd></div>
-          <div><dt>Order</dt><dd>{currentOrder.product}</dd></div>
-          <div><dt>Payment</dt><dd>{currentOrder.payment}</dd></div>
-          <div><dt>Status</dt><dd>{currentOrder.status}</dd></div>
-          <div><dt>Delivered by</dt><dd>{currentOrder.deliveredBy}</dd></div>
-          <div><dt>Rider phone</dt><dd>{currentOrder.riderPhone}</dd></div>
-          <div><dt>Available riders</dt><dd>{availableRiders.length}</dd></div>
-          <div><dt>Company riders</dt><dd>{riders.length}</dd></div>
-          <div><dt>Vehicle</dt><dd>{currentOrder.vehicle}</dd></div>
-          <div><dt>Delivered time</dt><dd>{currentOrder.deliveredTime}</dd></div>
-          <div><dt>Reference</dt><dd>{currentOrder.reference}</dd></div>
-          <div><dt>Call notes</dt><dd>{currentOrder.notes}</dd></div>
-        </dl>
-      </div>
-    </section>
-  );
-}
-
-function ProcessCheck({ currentOrder }) {
-  return (
-    <section className="workspace process-check">
-      <div className="panel">
-        <div className="section-heading">
-          <p className="eyebrow">End-to-end process</p>
-          <h2>How the platform moves work</h2>
-        </div>
-        <div className="lane-grid">
-          {processRows.map((lane) => {
-            const Icon = lane.icon;
-            return (
-              <div className="lane" key={lane.label}>
-                <h3><Icon size={20} /> {lane.label}</h3>
-                {lane.items.map((item, index) => (
-                  <div className="lane-item" key={item}>
-                    <span>{index + 1}</span>
-                    {item}
-                  </div>
-                ))}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-      <div className="panel">
-        <div className="section-heading">
-          <p className="eyebrow">Current order status</p>
-          <h2>{currentOrder.status}</h2>
-        </div>
-        <dl className="order-summary">
-          <div><dt>Customer</dt><dd>{currentOrder.customer}</dd></div>
-          <div><dt>Phone</dt><dd>{currentOrder.phone}</dd></div>
-          <div><dt>Product</dt><dd>{currentOrder.product}</dd></div>
-          <div><dt>Destination</dt><dd>{currentOrder.destination}</dd></div>
-          <div><dt>ETA</dt><dd>{currentOrder.eta}</dd></div>
-          <div><dt>Delivered by</dt><dd>{currentOrder.deliveredBy}</dd></div>
-          <div><dt>Delivered time</dt><dd>{currentOrder.deliveredTime}</dd></div>
-          <div><dt>Total</dt><dd>{money(currentOrder.total)}</dd></div>
-        </dl>
-      </div>
-    </section>
+      {low.length > 0 && <div className="stock-alert"><AlertTriangle size={16} /> Restock {low.join(", ")}</div>}
+    </article>
   );
 }
 
