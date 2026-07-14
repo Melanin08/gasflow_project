@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   AlertTriangle,
@@ -19,7 +19,6 @@ import {
   Store,
   Truck,
   WalletCards,
-  Warehouse
 } from "lucide-react";
 import "./styles.css";
 
@@ -39,8 +38,7 @@ const stores = [
   { id: "st-06", name: "Kisauni Store", zone: "Kisauni", lat: -6.1378, lng: 39.2207, stock: { "6kg": 22, "15kg": 15, "38kg": 3, starter: 4 }, riders: 2, open: true },
   { id: "st-07", name: "Kiembe Samaki Store", zone: "Kiembe Samaki", lat: -6.2234, lng: 39.2212, stock: { "6kg": 11, "15kg": 10, "38kg": 3, starter: 2 }, riders: 1, open: true },
   { id: "st-08", name: "Jang'ombe Store", zone: "Jang'ombe", lat: -6.1752, lng: 39.2145, stock: { "6kg": 15, "15kg": 12, "38kg": 5, starter: 5 }, riders: 2, open: true },
-  { id: "st-09", name: "Chukwani Store", zone: "Chukwani", lat: -6.227, lng: 39.2244, stock: { "6kg": 9, "15kg": 8, "38kg": 2, starter: 2 }, riders: 1, open: true },
-  { id: "st-10", name: "Nungwi Partner Store", zone: "Nungwi", lat: -5.7264, lng: 39.2987, stock: { "6kg": 18, "15kg": 11, "38kg": 4, starter: 3 }, riders: 2, open: true }
+  { id: "st-09", name: "Chukwani Store", zone: "Chukwani", lat: -6.227, lng: 39.2244, stock: { "6kg": 9, "15kg": 8, "38kg": 2, starter: 2 }, riders: 1, open: true }
 ];
 
 const riders = [
@@ -51,7 +49,7 @@ const riders = [
   { id: "rd-05", name: "Yusuf Said", phone: "+255 742 201 404", vehicle: "Bike ZNZ 6201", storeId: "st-05" }
 ];
 
-const zones = ["Stone Town", "Fuoni", "Bububu", "Mwanakwerekwe", "Mombasa", "Kisauni", "Kiembe Samaki", "Jang'ombe", "Chukwani", "Nungwi"];
+const zones = ["Stone Town", "Fuoni", "Bububu", "Mwanakwerekwe", "Mombasa", "Kisauni", "Kiembe Samaki", "Jang'ombe", "Chukwani"];
 const zonePins = {
   "Stone Town": { lat: -6.1622, lng: 39.1921 },
   Fuoni: { lat: -6.183, lng: 39.25 },
@@ -61,8 +59,7 @@ const zonePins = {
   Kisauni: { lat: -6.1378, lng: 39.2207 },
   "Kiembe Samaki": { lat: -6.2234, lng: 39.2212 },
   "Jang'ombe": { lat: -6.1752, lng: 39.2145 },
-  Chukwani: { lat: -6.227, lng: 39.2244 },
-  Nungwi: { lat: -5.7264, lng: 39.2987 }
+  Chukwani: { lat: -6.227, lng: 39.2244 }
 };
 const paymentMethods = [
   {
@@ -195,7 +192,7 @@ async function geocodeDeliveryAddress(address, zone) {
   return {
     lat: Number(match.lat),
     lng: Number(match.lon),
-    label: match.display_name || address
+    label: address
   };
 }
 
@@ -205,24 +202,38 @@ function deliveryStageProgress(status) {
   return [5, 18, 36, 68, 100][index] || 12;
 }
 
-function addressOffset(address = "") {
-  const seed = [...address].reduce((sum, character) => sum + character.charCodeAt(0), 0);
-  const angle = (seed % 360) * (Math.PI / 180);
-  const radius = 0.008 + (seed % 7) * 0.0014;
+function interpolateLocation(from, to, progress) {
+  const clampedProgress = Math.min(1, Math.max(0, progress));
   return {
-    lat: Math.sin(angle) * radius,
-    lng: Math.cos(angle) * radius
+    lat: from.lat + (to.lat - from.lat) * clampedProgress,
+    lng: from.lng + (to.lng - from.lng) * clampedProgress
   };
 }
 
-function mapDestination(order) {
-  const destination = mapDestination(order);
-  const offset = addressOffset(`${order.address} ${order.zone}`);
-  return {
-    ...destination,
-    lat: destination.lat + offset.lat,
-    lng: destination.lng + offset.lng
-  };
+function trackedRiderLocation(order, store, destination, riderLocation, nowMs) {
+  if (riderLocation) return riderLocation;
+  const etaMinutes = order.initialEtaMinutes || deliveryMinutesEstimate(store, destination);
+  const startedAtMs = order.createdAtMs || nowMs;
+  const elapsedMs = Math.max(0, nowMs - startedAtMs);
+  const progress = elapsedMs / (etaMinutes * 60 * 1000);
+  return interpolateLocation(store, destination, progress);
+}
+
+function remainingEtaSeconds(order, currentLocation, destination, nowMs) {
+  if (order.status === "Delivered") return 0;
+  if (order.createdAtMs && order.initialEtaMinutes) {
+    const elapsedSeconds = Math.floor((nowMs - order.createdAtMs) / 1000);
+    return Math.max(0, order.initialEtaMinutes * 60 - elapsedSeconds);
+  }
+  return Math.max(30, Math.ceil(deliveryMinutesEstimate(currentLocation, destination) * 60));
+}
+
+function etaText(seconds) {
+  if (seconds <= 0) return "Arriving";
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  if (minutes <= 0) return `${remainingSeconds}s`;
+  return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
 }
 
 function latLngToWorld(location, zoom) {
@@ -242,15 +253,16 @@ function mapZoomForDistance(distance) {
 }
 
 function createTrackingMapView(store, destination, riderPosition) {
-  const points = [store, destination, riderPosition].filter(Boolean);
-  const zoom = mapZoomForDistance(Math.max(distanceKm(store, destination), riderPosition ? distanceKm(riderPosition, destination) : 0));
+  const rider = riderPosition || store;
+  const points = [store, destination, rider];
+  const zoom = mapZoomForDistance(Math.max(distanceKm(store, destination), distanceKm(rider, destination)));
   const projectedPoints = points.map((point) => latLngToWorld(point, zoom));
-  const padding = 170;
+  const padding = 180;
   let minX = Math.min(...projectedPoints.map((point) => point.x)) - padding;
   let maxX = Math.max(...projectedPoints.map((point) => point.x)) + padding;
   let minY = Math.min(...projectedPoints.map((point) => point.y)) - padding;
   let maxY = Math.max(...projectedPoints.map((point) => point.y)) + padding;
-  const targetAspect = 1.46;
+  const targetAspect = 1.62;
   const width = maxX - minX;
   const height = maxY - minY;
 
@@ -273,20 +285,20 @@ function createTrackingMapView(store, destination, riderPosition) {
     return { left: `${x}%`, top: `${y}%`, x, y };
   }
 
-  const storePoint = point(store);
-  const destinationPoint = point(destination);
-  const riderPoint = point(riderPosition || store);
   const tileMinX = Math.floor(minX / 256);
   const tileMaxX = Math.floor(maxX / 256);
   const tileMinY = Math.floor(minY / 256);
   const tileMaxY = Math.floor(maxY / 256);
   const tiles = [];
+  const tilesPerAxis = 2 ** zoom;
 
   for (let x = tileMinX; x <= tileMaxX; x += 1) {
     for (let y = tileMinY; y <= tileMaxY; y += 1) {
+      if (y < 0 || y >= tilesPerAxis) continue;
+      const wrappedX = ((x % tilesPerAxis) + tilesPerAxis) % tilesPerAxis;
       tiles.push({
         key: `${zoom}-${x}-${y}`,
-        url: `https://tile.openstreetmap.org/${zoom}/${x}/${y}.png`,
+        url: `https://tile.openstreetmap.org/${zoom}/${wrappedX}/${y}.png`,
         style: {
           left: `${((x * 256 - minX) / (maxX - minX)) * 100}%`,
           top: `${((y * 256 - minY) / (maxY - minY)) * 100}%`,
@@ -297,21 +309,23 @@ function createTrackingMapView(store, destination, riderPosition) {
     }
   }
 
-  const routePoints = [
-    storePoint,
-    { x: storePoint.x + (destinationPoint.x - storePoint.x) * 0.3, y: storePoint.y - 8 },
-    { x: storePoint.x + (destinationPoint.x - storePoint.x) * 0.56, y: storePoint.y + 12 },
-    { x: storePoint.x + (destinationPoint.x - storePoint.x) * 0.78, y: destinationPoint.y - 8 },
-    destinationPoint
-  ];
+  const storePoint = point(store);
+  const riderPoint = point(rider);
+  const destinationPoint = point(destination);
 
   return {
-    directionsUrl: `https://www.google.com/maps/dir/?api=1&origin=${store.lat},${store.lng}&destination=${destination.lat},${destination.lng}&travelmode=driving`,
     tiles,
     storePoint,
-    destinationPoint,
     riderPoint,
-    routePath: routePoints.map((item, index) => `${index === 0 ? "M" : "L"} ${item.x} ${item.y}`).join(" ")
+    destinationPoint,
+    completedPath: [
+      storePoint,
+      riderPoint
+    ].map((item, index) => `${index === 0 ? "M" : "L"} ${item.x} ${item.y}`).join(" "),
+    remainingPath: [
+      riderPoint,
+      destinationPoint
+    ].map((item, index) => `${index === 0 ? "M" : "L"} ${item.x} ${item.y}`).join(" ")
   };
 }
 
@@ -357,6 +371,7 @@ function App() {
   const [dispatchMessage, setDispatchMessage] = useState({ type: "", text: "" });
   const [form, setForm] = useState(emptyOrderForm);
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
+  const [nowMs, setNowMs] = useState(Date.now());
   const riderWatchers = useRef({});
 
   const selectedCylinder = cylinderTypes.find((item) => item.id === form.cylinder);
@@ -396,6 +411,11 @@ function App() {
     const item = cylinderTypes.find((type) => type.id === order.cylinder);
     return sum + (item?.price || 0) * order.quantity;
   }, 0);
+
+  useEffect(() => {
+    const timerId = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(timerId);
+  }, []);
 
   function updateForm(key, value) {
     setForm((current) => ({
@@ -504,6 +524,8 @@ function App() {
 
     const store = recommendStore(deliveryLocation, form.cylinder, form.quantity);
     const rider = pickRider(store.id);
+    const createdAtMs = Date.now();
+    const initialEtaMinutes = deliveryMinutesEstimate(store, deliveryLocation);
     const order = {
       ...form,
       id: `GF-${Math.floor(9000 + Math.random() * 900)}`,
@@ -514,10 +536,11 @@ function App() {
       paymentStatus: isCashOrder ? "Cash pending" : "Paid",
       paymentReference: isCashOrder ? `COD-${Date.now().toString().slice(-5)}` : form.paymentReference.trim().toUpperCase(),
       paymentPhone: isCashOrder ? "" : fullTanzaniaPhone(paymentPhone),
-      status: "Accepted",
+      status: "Rider assigned",
       storeId: store.id,
       riderId: rider.id,
-      mapAddress: deliveryLocation.label,
+      createdAtMs,
+      initialEtaMinutes,
       createdAt: new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" }).format(new Date())
     };
     order.deliveryLat = deliveryLocation.lat;
@@ -671,11 +694,21 @@ function App() {
               </label>
               <label>
                 Exact address
-                <input value={form.address} onChange={(event) => updateForm("address", event.target.value)} placeholder="Street, shop, landmark, or house number" />
+                <span className="address-location-input">
+                  <input
+                    value={form.address}
+                    onChange={(event) => updateForm("address", event.target.value)}
+                    placeholder="Street, shop, landmark, or house number"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck="false"
+                    name="gasflow-dropoff-location"
+                  />
+                  <button type="button" onClick={useCustomerCurrentLocation} disabled={isSubmittingOrder} aria-label="Use current location">
+                    <MapPin size={21} />
+                  </button>
+                </span>
               </label>
-              <button className="ghost-action location-action" type="button" onClick={useCustomerCurrentLocation} disabled={isSubmittingOrder}>
-                <MapPin size={17} /> Use my current location
-              </button>
               <label>
                 Gas type
                 <select value={form.cylinder} onChange={(event) => updateForm("cylinder", event.target.value)}>
@@ -776,7 +809,7 @@ function App() {
                 <Clock3 size={34} />
                 <p className="eyebrow">Customer service</p>
                 <h2>{hasMappedDeliveryPlace ? "Choose gas type" : "No store selected yet"}</h2>
-                <p>{hasMappedDeliveryPlace ? "Select the gas type. The app will then choose the nearest store that can serve the order." : "Use my current location first. The app will not choose any store before the real location is available."}</p>
+                  <p>{hasMappedDeliveryPlace ? "Select the gas type. The app will then choose the nearest store that can serve the order." : "Tap the location pin in the exact address field first. The app will not choose any store before the real location is available."}</p>
               </div>
             )}
             {canMatchStore && bestStore && (
@@ -790,8 +823,8 @@ function App() {
                   <span>{form.zone || "Current location"}</span>
                 </div>
                 <div className="eta-number">
-                  <strong>Route pending</strong>
-                  <span>ETA starts after rider shares live GPS</span>
+                  <strong>{deliveryMinutesEstimate(bestStore, formDestination)} min</strong>
+                  <span>Live tracking starts when the order is placed</span>
                 </div>
                 <div className="assignment-card">
                   <Bike size={20} />
@@ -854,7 +887,7 @@ function App() {
       {view === "tracking" && (
         <section className="workspace customer-tracking-layout">
           <div className="tracking-experience">
-            {trackingOrder && <LiveMap order={trackingOrder} riderLocation={riderLocations[trackingOrder.riderId]} />}
+            {trackingOrder && <LiveMap order={trackingOrder} riderLocation={riderLocations[trackingOrder.riderId]} nowMs={nowMs} />}
             {!trackingOrder && <div className="empty-state"><CheckCircle2 size={28} /> Place an order to track your gas.</div>}
           </div>
         </section>
@@ -863,21 +896,25 @@ function App() {
   );
 }
 
-function LiveMap({ order, riderLocation }) {
+function LiveMap({ order, riderLocation, nowMs }) {
   const store = stores.find((item) => item.id === order.storeId) || stores[0];
   const rider = riders.find((item) => item.id === order.riderId) || riders[0];
   const cylinder = cylinderTypes.find((item) => item.id === order.cylinder);
   const payment = getPaymentMethod(order.payment);
   const destination = orderDestination(order);
   const hasLiveGps = Boolean(riderLocation);
-  const liveRiderLocation = riderLocation || { lat: store.lat, lng: store.lng };
+  const liveRiderLocation = trackedRiderLocation(order, store, destination, riderLocation, nowMs);
   const mapView = createTrackingMapView(store, destination, liveRiderLocation);
-  const etaMinutes = order.status === "Delivered" ? 0 : deliveryMinutesEstimate(liveRiderLocation, destination);
-  const etaSourceLabel = hasLiveGps ? "from rider" : "from store";
-  const etaLabel = order.status === "Delivered" ? "Delivered" : hasLiveGps ? "Live GPS" : "GPS pending";
-  const pickupLabel = "Pickup";
-  const dropoffLabel = order.status === "Delivered" ? "Delivered" : "Dropoff";
-  const statusTitle = order.status === "Delivered" ? "Gas delivered" : hasLiveGps ? "Your gas is on the way" : "Waiting for rider location";
+  const etaSeconds = remainingEtaSeconds(order, liveRiderLocation, destination, nowMs);
+  const etaDisplay = order.status === "Delivered" ? "Delivered" : etaText(etaSeconds);
+  const etaSourceLabel = hasLiveGps ? "live GPS active" : "live tracking";
+  const etaLabel = etaDisplay;
+  const statusTitle = order.status === "Delivered" ? "Gas delivered" : "Your gas is on the way";
+  const trackingNote = order.status === "Delivered"
+    ? "Delivery completed."
+    : hasLiveGps
+      ? "Rider location is updating on the map."
+      : "Tracking route from pickup to your dropoff.";
   const riderInitials = rider.name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("");
 
   return (
@@ -897,62 +934,58 @@ function LiveMap({ order, riderLocation }) {
             />
           ))}
         </div>
-        <div className="map-watermark">Live gas tracking</div>
         <svg className="route-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-          <path className="route-shadow" d={mapView.routePath} />
-          <path className="route-main" d={mapView.routePath} />
+          <path className="route-shadow" d={mapView.remainingPath} />
+          <path className="route-remaining" d={mapView.remainingPath} />
+          <path className="route-completed" d={mapView.completedPath} />
         </svg>
-        <div className="map-eta-card">
-          <span>{order.status === "Delivered" ? "Arrived" : "Estimated arrival"}</span>
-          <strong>{order.status === "Delivered" ? "Delivered" : `${etaMinutes} min`}</strong>
-          {order.status !== "Delivered" && <small>{etaSourceLabel}</small>}
-        </div>
-        <span className="route-label pickup-label" style={mapView.storePoint}>{pickupLabel}</span>
-        <span className="route-label dropoff-label" style={mapView.destinationPoint}>{dropoffLabel}</span>
-        <span className="map-pin store-pin" style={mapView.storePoint}><Warehouse size={15} /></span>
+        <span className="map-pin store-pin" style={mapView.storePoint}><Store size={15} /></span>
         <span className="map-pin customer-pin" style={mapView.destinationPoint}><MapPin size={15} /></span>
         <span className="rider-pin" style={mapView.riderPoint}><Truck size={17} /></span>
-      </div>
-      <div className="tracking-bottom-sheet">
-        <span className="sheet-handle" />
-        <div className="tracking-hero-row">
-          <div>
-            <p className="eyebrow">Gas delivery</p>
-            <h2>{statusTitle}</h2>
-            <span>{order.status === "Delivered" ? "Thank you for ordering with GasFlow." : hasLiveGps ? "Rider live location is active." : "Rider has not shared live GPS yet."}</span>
+        <div className="map-watermark">Live gas tracking</div>
+        <div className="map-eta-card">
+          <span>{order.status === "Delivered" ? "Arrived" : "Estimated arrival"}</span>
+          <strong>{etaDisplay}</strong>
+          {order.status !== "Delivered" && <small>{etaSourceLabel}</small>}
+        </div>
+
+        <div className="tracking-bottom-sheet">
+          <span className="sheet-handle" />
+          <div className="tracking-hero-row">
+            <div>
+              <p className="eyebrow">Gas delivery</p>
+              <h2>{statusTitle}</h2>
+              <span>{trackingNote}</span>
+            </div>
+            <strong className="eta-badge">{etaLabel}</strong>
           </div>
-          <strong className="eta-badge">{etaLabel}</strong>
-        </div>
 
-        <div className="tracking-steps">
-          {deliveryStages.slice(1).map((stage) => (
-            <span className={deliveryStages.indexOf(stage) <= deliveryStages.indexOf(order.status) ? "active" : ""} key={stage}>
-              {stage}
-            </span>
-          ))}
-        </div>
-
-        <div className="rider-card">
-          <span className="rider-avatar">{riderInitials}</span>
-          <div>
-            <strong>{rider.name}</strong>
-            <span>{rider.vehicle}</span>
+          <div className="tracking-steps">
+            {deliveryStages.slice(1).map((stage) => (
+              <span className={deliveryStages.indexOf(stage) <= deliveryStages.indexOf(order.status) ? "active" : ""} key={stage}>
+                {stage}
+              </span>
+            ))}
           </div>
-          <a className="round-action" href={`tel:${rider.phone}`} aria-label="Call rider"><Phone size={17} /></a>
-          <a className="round-action" href={`sms:${rider.phone}`} aria-label="Message rider"><MessageCircle size={17} /></a>
-        </div>
 
-        <div className="customer-summary-list compact">
-          <div><span>Order</span><strong>{order.id}</strong></div>
-          <div><span>Gas</span><strong>{order.quantity} x {cylinder?.label}</strong></div>
-          <div><span>Deliver to</span><strong>{order.mapAddress || `${order.address}, ${order.zone}`}</strong></div>
-          <div><span>Payment</span><strong>{payment.name} - {order.paymentStatus}</strong></div>
-          <div><span>From</span><strong>{store.name}</strong></div>
-        </div>
+          <div className="rider-card">
+            <span className="rider-avatar">{riderInitials}</span>
+            <div>
+              <strong>{rider.name}</strong>
+              <span>{rider.vehicle}</span>
+            </div>
+            <a className="round-action" href={`tel:${rider.phone}`} aria-label="Call rider"><Phone size={17} /></a>
+            <a className="round-action" href={`sms:${rider.phone}`} aria-label="Message rider"><MessageCircle size={17} /></a>
+          </div>
 
-        <a className="primary-action map-link" href={mapView.directionsUrl} target="_blank" rel="noreferrer">
-          <Route size={17} /> Open route in Google Maps
-        </a>
+          <div className="customer-summary-list compact">
+            <div><span>Order</span><strong>{order.id}</strong></div>
+            <div><span>Gas</span><strong>{order.quantity} x {cylinder?.label}</strong></div>
+            <div><span>Dropoff</span><strong>Your selected delivery point</strong></div>
+            <div><span>Payment</span><strong>{payment.name} - {order.paymentStatus}</strong></div>
+            <div><span>From</span><strong>{store.name}</strong></div>
+          </div>
+        </div>
       </div>
     </div>
   );
