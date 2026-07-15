@@ -1,21 +1,23 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   AlertTriangle,
+  Bell,
   Bike,
   CheckCircle2,
   Clock3,
   Flame,
+  Gift,
+  Languages,
   MapPin,
   MessageCircle,
   Minus,
-  PackageCheck,
   Phone,
   Plus,
-  RefreshCcw,
+  Receipt,
   Route,
   Send,
-  ShieldCheck,
+  Star,
   Store,
   Truck,
   WalletCards,
@@ -23,22 +25,26 @@ import {
 import "./styles.css";
 
 const cylinderTypes = [
-  { id: "6kg", label: "6kg refill", price: 18000 },
-  { id: "15kg", label: "15kg refill", price: 42000 },
-  { id: "38kg", label: "38kg refill", price: 115000 },
-  { id: "starter", label: "New setup kit", price: 76000 }
+  { id: "6kg", category: "LPG Cylinder", label: "6kg refill", swLabel: "Kujaza 6kg", price: 18000 },
+  { id: "15kg", category: "LPG Cylinder", label: "15kg refill", swLabel: "Kujaza 15kg", price: 42000 },
+  { id: "38kg", category: "LPG Cylinder", label: "38kg refill", swLabel: "Kujaza 38kg", price: 115000 },
+  { id: "starter", category: "LPG Cylinder", label: "New setup kit", swLabel: "Seti mpya", price: 76000 },
+  { id: "natural-refill", category: "Natural Gas Refill", label: "Natural gas refill", swLabel: "Kujaza gesi asilia", price: 52000 },
+  { id: "industrial-bulk", category: "Industrial/Bulk", label: "Industrial bulk order", swLabel: "Oda kubwa ya kiwanda", price: 185000 }
 ];
 
+const gasCategories = ["LPG Cylinder", "Natural Gas Refill", "Industrial/Bulk"];
+
 const stores = [
-  { id: "st-01", name: "Stone Town Store", zone: "Stone Town", lat: -6.1629, lng: 39.1926, stock: { "6kg": 19, "15kg": 16, "38kg": 5, starter: 7 }, riders: 4, open: true },
-  { id: "st-02", name: "Fuoni Store", zone: "Fuoni", lat: -6.183, lng: 39.25, stock: { "6kg": 28, "15kg": 24, "38kg": 7, starter: 5 }, riders: 3, open: true },
-  { id: "st-03", name: "Bububu Store", zone: "Bububu", lat: -6.1003, lng: 39.2172, stock: { "6kg": 20, "15kg": 18, "38kg": 6, starter: 3 }, riders: 3, open: true },
-  { id: "st-04", name: "Mwanakwerekwe Store", zone: "Mwanakwerekwe", lat: -6.1759, lng: 39.2288, stock: { "6kg": 14, "15kg": 21, "38kg": 4, starter: 6 }, riders: 2, open: true },
-  { id: "st-05", name: "Mombasa Store", zone: "Mombasa", lat: -6.176, lng: 39.246, stock: { "6kg": 17, "15kg": 13, "38kg": 4, starter: 4 }, riders: 2, open: true },
-  { id: "st-06", name: "Kisauni Store", zone: "Kisauni", lat: -6.1378, lng: 39.2207, stock: { "6kg": 22, "15kg": 15, "38kg": 3, starter: 4 }, riders: 2, open: true },
-  { id: "st-07", name: "Kiembe Samaki Store", zone: "Kiembe Samaki", lat: -6.2234, lng: 39.2212, stock: { "6kg": 11, "15kg": 10, "38kg": 3, starter: 2 }, riders: 1, open: true },
-  { id: "st-08", name: "Jang'ombe Store", zone: "Jang'ombe", lat: -6.1752, lng: 39.2145, stock: { "6kg": 15, "15kg": 12, "38kg": 5, starter: 5 }, riders: 2, open: true },
-  { id: "st-09", name: "Chukwani Store", zone: "Chukwani", lat: -6.227, lng: 39.2244, stock: { "6kg": 9, "15kg": 8, "38kg": 2, starter: 2 }, riders: 1, open: true }
+  { id: "st-01", name: "Stone Town Store", zone: "Stone Town", lat: -6.1629, lng: 39.1926, stock: { "6kg": 19, "15kg": 16, "38kg": 5, starter: 7, "natural-refill": 8, "industrial-bulk": 2 }, riders: 4, open: true },
+  { id: "st-02", name: "Fuoni Store", zone: "Fuoni", lat: -6.183, lng: 39.25, stock: { "6kg": 28, "15kg": 24, "38kg": 7, starter: 5, "natural-refill": 9, "industrial-bulk": 2 }, riders: 3, open: true },
+  { id: "st-03", name: "Bububu Store", zone: "Bububu", lat: -6.1003, lng: 39.2172, stock: { "6kg": 20, "15kg": 18, "38kg": 6, starter: 3, "natural-refill": 6, "industrial-bulk": 1 }, riders: 3, open: true },
+  { id: "st-04", name: "Mwanakwerekwe Store", zone: "Mwanakwerekwe", lat: -6.1759, lng: 39.2288, stock: { "6kg": 14, "15kg": 21, "38kg": 4, starter: 6, "natural-refill": 7, "industrial-bulk": 2 }, riders: 2, open: true },
+  { id: "st-05", name: "Mombasa Store", zone: "Mombasa", lat: -6.176, lng: 39.246, stock: { "6kg": 17, "15kg": 13, "38kg": 4, starter: 4, "natural-refill": 5, "industrial-bulk": 1 }, riders: 2, open: true },
+  { id: "st-06", name: "Kisauni Store", zone: "Kisauni", lat: -6.1378, lng: 39.2207, stock: { "6kg": 22, "15kg": 15, "38kg": 3, starter: 4, "natural-refill": 5, "industrial-bulk": 1 }, riders: 2, open: true },
+  { id: "st-07", name: "Kiembe Samaki Store", zone: "Kiembe Samaki", lat: -6.2234, lng: 39.2212, stock: { "6kg": 11, "15kg": 10, "38kg": 3, starter: 2, "natural-refill": 4, "industrial-bulk": 1 }, riders: 1, open: true },
+  { id: "st-08", name: "Jang'ombe Store", zone: "Jang'ombe", lat: -6.1752, lng: 39.2145, stock: { "6kg": 15, "15kg": 12, "38kg": 5, starter: 5, "natural-refill": 6, "industrial-bulk": 1 }, riders: 2, open: true },
+  { id: "st-09", name: "Chukwani Store", zone: "Chukwani", lat: -6.227, lng: 39.2244, stock: { "6kg": 9, "15kg": 8, "38kg": 2, starter: 2, "natural-refill": 3, "industrial-bulk": 1 }, riders: 1, open: true }
 ];
 
 const riders = [
@@ -68,7 +74,7 @@ const paymentMethods = [
     accountLabel: "Business till / Lipa number",
     accountValue: "Set your company till number",
     referenceLabel: "M-Pesa receipt code",
-    instruction: "Customer pays from M-Pesa, then staff records the SMS receipt code."
+    instruction: "Pay from M-Pesa, then enter the SMS receipt code."
   },
   {
     id: "tigopesa",
@@ -76,7 +82,7 @@ const paymentMethods = [
     accountLabel: "Merchant number",
     accountValue: "Set your company merchant number",
     referenceLabel: "Tigo Pesa transaction ID",
-    instruction: "Customer pays through Tigo Pesa, then staff records the transaction ID."
+    instruction: "Pay through Tigo Pesa, then enter the transaction ID."
   },
   {
     id: "airtel",
@@ -84,7 +90,7 @@ const paymentMethods = [
     accountLabel: "Merchant number",
     accountValue: "Set your company merchant number",
     referenceLabel: "Airtel Money reference",
-    instruction: "Customer pays through Airtel Money, then staff records the reference."
+    instruction: "Pay through Airtel Money, then enter the reference."
   },
   {
     id: "halopesa",
@@ -92,7 +98,7 @@ const paymentMethods = [
     accountLabel: "Merchant number",
     accountValue: "Set your company merchant number",
     referenceLabel: "HaloPesa reference",
-    instruction: "Customer pays through HaloPesa, then staff records the reference."
+    instruction: "Pay through HaloPesa, then enter the reference."
   },
   {
     id: "cash",
@@ -101,9 +107,21 @@ const paymentMethods = [
     accountValue: "Rider collects cash at delivery",
     referenceLabel: "Cash receipt",
     instruction: "Order is reserved now. Rider collects cash and marks payment collected."
+  },
+  {
+    id: "card",
+    name: "Card / Bank",
+    accountLabel: "Secure checkout",
+    accountValue: "Card or bank transfer",
+    referenceLabel: "Bank/card reference",
+    instruction: "Pay by card or bank transfer, then enter the payment reference."
   }
 ];
 const deliveryStages = ["New", "Accepted", "Rider assigned", "On the way", "Delivered"];
+const promoCodes = {
+  GAS10: { type: "percent", value: 10, label: "10% off" },
+  KARIBU: { type: "fixed", value: 5000, label: "TZS 5,000 off" }
+};
 
 const initialOrders = [];
 const emptyOrderForm = {
@@ -111,17 +129,119 @@ const emptyOrderForm = {
   phone: "",
   zone: "",
   address: "",
+  category: "LPG Cylinder",
   cylinder: "",
   quantity: 1,
   payment: "",
   paymentPhone: "",
   paymentReference: "",
+  promoCode: "",
   notes: "",
   deliveryLocation: null
 };
 
+const text = {
+  en: {
+    eyebrow: "GasFlow customer app",
+    hero: "Fast gas delivery to your door",
+    placeOrder: "Place order",
+    trackOrder: "Track order",
+    orderGas: "Order gas",
+    chooseGas: "Choose your gas and delivery point",
+    customerName: "Customer name",
+    phoneNumber: "Phone number",
+    deliveryZone: "Delivery zone",
+    chooseDeliveryZone: "Choose delivery zone",
+    exactAddress: "Exact address",
+    gasCategory: "Gas category",
+    gasType: "Gas type",
+    chooseGasType: "Choose gas type",
+    notes: "Notes",
+    quantity: "Quantity",
+    paymentConfirmation: "Payment confirmation",
+    choosePayment: "Choose how you will pay",
+    paidBeforeDispatch: "Paid before delivery",
+    collectOnDelivery: "Collect on delivery",
+    paymentPhone: "Payment phone",
+    promo: "Promo code",
+    total: "Total",
+    findingMap: "Finding map...",
+    deliveryPoint: "Delivery point",
+    noDeliveryPoint: "No delivery point yet",
+    nearestDepot: "Nearest available depot",
+    liveTrackingStarts: "Live tracking starts when the order is placed",
+    available: "Available",
+    noStock: "No stock",
+    placeToTrack: "Place an order to track your gas.",
+    receipt: "Digital receipt",
+    confirmDelivered: "Confirm delivered",
+    reorder: "Reorder",
+    ratingTitle: "Rate depot and rider",
+    loyalty: "Loyalty points",
+    enableNotifications: "Enable notifications",
+    notificationsOn: "Notifications on",
+    currentLocation: "Current location"
+  },
+  sw: {
+    eyebrow: "Programu ya mteja GasFlow",
+    hero: "Gesi haraka mpaka mlangoni",
+    placeOrder: "Agiza",
+    trackOrder: "Fuatilia oda",
+    orderGas: "Agiza gesi",
+    chooseGas: "Chagua gesi na eneo la kufikishiwa",
+    customerName: "Jina la mteja",
+    phoneNumber: "Namba ya simu",
+    deliveryZone: "Eneo la kufikishiwa",
+    chooseDeliveryZone: "Chagua eneo",
+    exactAddress: "Anwani kamili",
+    gasCategory: "Aina ya gesi",
+    gasType: "Ukubwa wa gesi",
+    chooseGasType: "Chagua gesi",
+    notes: "Maelezo",
+    quantity: "Idadi",
+    paymentConfirmation: "Uthibitisho wa malipo",
+    choosePayment: "Chagua njia ya malipo",
+    paidBeforeDispatch: "Lipa kabla ya delivery",
+    collectOnDelivery: "Lipa ukipokea",
+    paymentPhone: "Simu ya malipo",
+    promo: "Kodi ya punguzo",
+    total: "Jumla",
+    findingMap: "Inatafuta ramani...",
+    deliveryPoint: "Eneo la kufikishiwa",
+    noDeliveryPoint: "Hakuna eneo bado",
+    nearestDepot: "Depo iliyo karibu",
+    liveTrackingStarts: "Ufuatiliaji utaanza baada ya kuagiza",
+    available: "Ipo",
+    noStock: "Haipo",
+    placeToTrack: "Agiza ili ufuatilie gesi yako.",
+    receipt: "Risiti ya kidigitali",
+    confirmDelivered: "Thibitisha kupokea",
+    reorder: "Agiza tena",
+    ratingTitle: "Kadiria depo na dereva",
+    loyalty: "Pointi za uaminifu",
+    enableNotifications: "Washa taarifa",
+    notificationsOn: "Taarifa zimewashwa",
+    currentLocation: "Eneo lako"
+  }
+};
+
 function money(value) {
   return `TZS ${value.toLocaleString("en-US")}`;
+}
+
+function gasLabel(item, language) {
+  return language === "sw" ? item.swLabel : item.label;
+}
+
+function promoDiscount(subtotal, promoCode) {
+  const promo = promoCodes[promoCode.trim().toUpperCase()];
+  if (!promo) return 0;
+  if (promo.type === "percent") return Math.round((subtotal * promo.value) / 100);
+  return Math.min(subtotal, promo.value);
+}
+
+function loyaltyPointsFor(total) {
+  return Math.max(1, Math.floor(total / 1000));
 }
 
 function localTanzaniaPhone(value) {
@@ -345,7 +465,7 @@ function TanzaniaPhoneInput({ value, onChange }) {
 }
 
 function getStoreScore(store, destination, cylinder, quantity) {
-  const stockPenalty = store.stock[cylinder] < quantity ? 1000 : 0;
+  const stockPenalty = (store.stock[cylinder] || 0) < quantity ? 1000 : 0;
   const riderPenalty = store.riders < 1 ? 400 : 0;
   return distanceKm(store, destination) + stockPenalty + riderPenalty;
 }
@@ -367,18 +487,25 @@ function getPaymentMethod(paymentId) {
 function App() {
   const [view, setView] = useState("dispatch");
   const [orders, setOrders] = useState(initialOrders);
-  const [riderLocations, setRiderLocations] = useState({});
+  const [riderLocations] = useState({});
   const [dispatchMessage, setDispatchMessage] = useState({ type: "", text: "" });
   const [form, setForm] = useState(emptyOrderForm);
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
   const [nowMs, setNowMs] = useState(Date.now());
-  const riderWatchers = useRef({});
+  const [language, setLanguage] = useState("en");
+  const [notificationStatus, setNotificationStatus] = useState("off");
+  const [loyaltyPoints, setLoyaltyPoints] = useState(0);
 
+  const t = text[language];
+  const filteredCylinderTypes = cylinderTypes.filter((item) => item.category === form.category);
   const selectedCylinder = cylinderTypes.find((item) => item.id === form.cylinder);
   const selectedPayment = form.payment ? getPaymentMethod(form.payment) : null;
-  const hasDeliveryRequest = form.address.trim().length > 0;
   const hasMappedDeliveryPlace = Boolean(form.deliveryLocation);
   const canMatchStore = hasMappedDeliveryPlace && Boolean(form.cylinder);
+  const subtotal = (selectedCylinder?.price || 0) * form.quantity;
+  const discount = promoDiscount(subtotal, form.promoCode);
+  const total = Math.max(0, subtotal - discount);
+  const activePromo = promoCodes[form.promoCode.trim().toUpperCase()];
   const formDestination = useMemo(() => {
     const fallback = form.deliveryLocation;
     if (!fallback) return null;
@@ -398,19 +525,12 @@ function App() {
       .map((store) => ({
         ...store,
         distance: distanceKm(store, formDestination),
-        canServe: store.stock[form.cylinder] >= form.quantity && store.riders > 0
+        canServe: (store.stock[form.cylinder] || 0) >= form.quantity && store.riders > 0
       }))
       .sort((a, b) => getStoreScore(a, formDestination, form.cylinder, form.quantity) - getStoreScore(b, formDestination, form.cylinder, form.quantity));
   }, [form.cylinder, form.quantity, formDestination]);
 
-  const activeOrders = orders.filter((order) => order.status !== "Delivered");
   const trackingOrder = orders[0];
-  const deliveredToday = orders.filter((order) => order.status === "Delivered").length;
-  const lowStockStores = stores.filter((store) => Object.values(store.stock).some((value) => value <= 3));
-  const revenue = orders.reduce((sum, order) => {
-    const item = cylinderTypes.find((type) => type.id === order.cylinder);
-    return sum + (item?.price || 0) * order.quantity;
-  }, 0);
 
   useEffect(() => {
     const timerId = window.setInterval(() => setNowMs(Date.now()), 1000);
@@ -421,9 +541,31 @@ function App() {
     setForm((current) => ({
       ...current,
       [key]: value,
+      ...(key === "category" ? { cylinder: "" } : {}),
       ...(["address", "zone"].includes(key) ? { deliveryLocation: null } : {})
     }));
     setDispatchMessage({ type: "", text: "" });
+  }
+
+  async function requestNotifications() {
+    if (!("Notification" in window)) {
+      setNotificationStatus("unsupported");
+      setDispatchMessage({ type: "error", text: "This browser does not support push notifications." });
+      return;
+    }
+
+    const permission = await Notification.requestPermission();
+    setNotificationStatus(permission === "granted" ? "on" : "blocked");
+    setDispatchMessage({
+      type: permission === "granted" ? "success" : "error",
+      text: permission === "granted" ? "Push notifications are enabled." : "Notifications were not enabled."
+    });
+  }
+
+  function notifyCustomer(title, body) {
+    if (notificationStatus === "on" && "Notification" in window && Notification.permission === "granted") {
+      new Notification(title, { body });
+    }
   }
 
   function useCustomerCurrentLocation() {
@@ -526,6 +668,7 @@ function App() {
     const rider = pickRider(store.id);
     const createdAtMs = Date.now();
     const initialEtaMinutes = deliveryMinutesEstimate(store, deliveryLocation);
+    const earnedPoints = loyaltyPointsFor(total);
     const order = {
       ...form,
       id: `GF-${Math.floor(9000 + Math.random() * 900)}`,
@@ -537,6 +680,11 @@ function App() {
       paymentReference: isCashOrder ? `COD-${Date.now().toString().slice(-5)}` : form.paymentReference.trim().toUpperCase(),
       paymentPhone: isCashOrder ? "" : fullTanzaniaPhone(paymentPhone),
       status: "Rider assigned",
+      subtotal,
+      discount,
+      total,
+      earnedPoints,
+      rating: 0,
       storeId: store.id,
       riderId: rider.id,
       createdAtMs,
@@ -547,90 +695,56 @@ function App() {
     order.deliveryLng = deliveryLocation.lng;
 
     setOrders((current) => [order, ...current]);
+    setLoyaltyPoints((current) => current + earnedPoints);
     setForm(emptyOrderForm);
     setDispatchMessage({
       type: "success",
-      text: `${order.id} placed with real map location. Rider: ${rider.name}.`
+      text: `${order.id} placed. You earned ${earnedPoints} loyalty points.`
     });
+    notifyCustomer("GasFlow order placed", `${order.id} is assigned to ${rider.name}.`);
     setView("tracking");
   }
 
-  function advanceOrder(orderId) {
-    const currentOrder = orders.find((order) => order.id === orderId);
-    const currentIndex = deliveryStages.indexOf(currentOrder?.status);
-    const nextStatus = deliveryStages[Math.min(deliveryStages.length - 1, currentIndex + 1)];
-
+  function confirmDelivered(orderId) {
     setOrders((current) =>
       current.map((order) => {
         if (order.id !== orderId) return order;
-        return { ...order, status: nextStatus };
+        return {
+          ...order,
+          status: "Delivered",
+          paymentStatus: order.payment === "cash" ? "Paid" : order.paymentStatus,
+          deliveredAt: new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" }).format(new Date())
+        };
       })
     );
-
-    if (nextStatus === "Delivered") {
-      setView("tracking");
-    }
+    notifyCustomer("Gas delivered", "Your GasFlow order was marked delivered.");
   }
 
-  function resetDemo() {
-    Object.values(riderWatchers.current).forEach((watchId) => navigator.geolocation?.clearWatch?.(watchId));
-    riderWatchers.current = {};
-    setOrders(initialOrders);
-    setRiderLocations({});
+  function rateOrder(orderId, rating) {
+    setOrders((current) =>
+      current.map((order) => order.id === orderId ? { ...order, rating } : order)
+    );
   }
 
-  function updateRiderLocation(riderId, location) {
-    setRiderLocations((current) => ({
-      ...current,
-      [riderId]: {
-        lat: location.lat,
-        lng: location.lng,
-        updatedAt: new Date().toISOString()
+  function reorder(order) {
+    setForm({
+      ...emptyOrderForm,
+      customer: order.customer,
+      phone: order.phone,
+      zone: order.zone,
+      address: order.address,
+      category: order.category || "LPG Cylinder",
+      cylinder: order.cylinder,
+      quantity: order.quantity,
+      payment: order.payment,
+      deliveryLocation: {
+        lat: order.deliveryLat,
+        lng: order.deliveryLng,
+        label: order.address
       }
-    }));
-  }
-
-  function useRiderBrowserGps(orderId) {
-    const order = orders.find((item) => item.id === orderId);
-    if (!order) return;
-    if (!navigator.geolocation) {
-      setDispatchMessage({ type: "error", text: "This device/browser does not support GPS sharing." });
-      return;
-    }
-
-    if (riderWatchers.current[order.riderId]) {
-      navigator.geolocation.clearWatch(riderWatchers.current[order.riderId]);
-    }
-
-    const watchId = navigator.geolocation.watchPosition((position) => {
-      const riderPosition = {
-        lat: position.coords.latitude,
-        lng: position.coords.longitude
-      };
-      const remainingKm = distanceKm(riderPosition, orderDestination(order));
-
-      updateRiderLocation(order.riderId, riderPosition);
-      setOrders((current) =>
-        current.map((item) => {
-          if (item.id !== orderId) return item;
-          return { ...item, status: remainingKm <= 0.08 ? "Delivered" : "On the way" };
-        })
-      );
-
-      if (remainingKm <= 0.08) {
-        navigator.geolocation.clearWatch(watchId);
-        delete riderWatchers.current[order.riderId];
-      }
-    }, () => {
-      setDispatchMessage({ type: "error", text: "GPS permission was denied or unavailable on this device." });
-    }, {
-      enableHighAccuracy: true,
-      timeout: 12000,
-      maximumAge: 0
     });
-
-    riderWatchers.current[order.riderId] = watchId;
-    setDispatchMessage({ type: "success", text: "Live rider GPS is active. ETA will reduce as the rider gets closer." });
+    setView("dispatch");
+    setDispatchMessage({ type: "info", text: "Previous order details loaded. Check payment and place the reorder." });
   }
 
   return (
@@ -638,23 +752,28 @@ function App() {
       <header className="topbar">
         <div className="brand-mark"><Flame size={26} /></div>
         <div>
-          <p className="eyebrow">GasFlow dispatch network</p>
-          <h1>Fast gas delivery across stores</h1>
+          <p className="eyebrow">{t.eyebrow}</p>
+          <h1>{t.hero}</h1>
         </div>
-        <div className="manager-card">
-          <ShieldCheck size={20} />
-          <span>Customer app</span>
-          <strong>Order and track gas</strong>
+        <div className="top-actions">
+          <button className="icon-text-action" type="button" onClick={() => setLanguage((current) => current === "en" ? "sw" : "en")}>
+            <Languages size={18} /> {language === "en" ? "SW" : "EN"}
+          </button>
+          <button className="icon-text-action" type="button" onClick={requestNotifications}>
+            <Bell size={18} /> {notificationStatus === "on" ? t.notificationsOn : t.enableNotifications}
+          </button>
+          <div className="customer-app-card">
+            <Gift size={20} />
+            <span>{t.loyalty}</span>
+            <strong>{loyaltyPoints}</strong>
+          </div>
         </div>
       </header>
 
       <nav className="view-tabs" aria-label="Main views">
         {[
-          ["dispatch", "Place order"],
-          ["tracking", "Track order"],
-          ["rider", "Rider app"],
-          ["manager", "Manager board"],
-          ["stores", "Across stores"]
+          ["dispatch", t.placeOrder],
+          ["tracking", t.trackOrder]
         ].map(([id, label]) => (
           <button key={id} className={view === id ? "active" : ""} onClick={() => setView(id)}>
             {label}
@@ -667,33 +786,33 @@ function App() {
           <div className="panel">
             <div className="section-heading">
               <div>
-                <p className="eyebrow">Customer problem solved here</p>
-                <h2>Customer service order desk</h2>
+                <p className="eyebrow">{t.orderGas}</p>
+                <h2>{t.chooseGas}</h2>
               </div>
               <span className="status-pill">
                 <Clock3 size={16} />
-                {canMatchStore ? "Store match ready" : hasMappedDeliveryPlace ? "Choose gas type" : "Waiting for customer location"}
+                {canMatchStore ? "Delivery match ready" : hasMappedDeliveryPlace ? t.chooseGasType : "Waiting for your location"}
               </span>
             </div>
 
             <div className="order-form">
               <label>
-                Customer name
+                {t.customerName}
                 <input value={form.customer} onChange={(event) => updateForm("customer", event.target.value)} placeholder="Example: Amina Juma" />
               </label>
               <label>
-                Phone number
+                {t.phoneNumber}
                 <TanzaniaPhoneInput value={form.phone} onChange={(value) => updateForm("phone", value)} />
               </label>
               <label>
-                Delivery zone
+                {t.deliveryZone}
                 <select value={form.zone} onChange={(event) => updateForm("zone", event.target.value)}>
-                  <option value="">Choose delivery zone</option>
+                  <option value="">{t.chooseDeliveryZone}</option>
                   {zones.map((zone) => <option key={zone}>{zone}</option>)}
                 </select>
               </label>
               <label>
-                Exact address
+                {t.exactAddress}
                 <span className="address-location-input">
                   <input
                     value={form.address}
@@ -710,18 +829,24 @@ function App() {
                 </span>
               </label>
               <label>
-                Gas type
-                <select value={form.cylinder} onChange={(event) => updateForm("cylinder", event.target.value)}>
-                  <option value="">Choose gas type</option>
-                  {cylinderTypes.map((item) => <option value={item.id} key={item.id}>{item.label}</option>)}
+                {t.gasCategory}
+                <select value={form.category} onChange={(event) => updateForm("category", event.target.value)}>
+                  {gasCategories.map((category) => <option value={category} key={category}>{category}</option>)}
                 </select>
               </label>
               <label>
-                Notes
+                {t.gasType}
+                <select value={form.cylinder} onChange={(event) => updateForm("cylinder", event.target.value)}>
+                  <option value="">{t.chooseGasType}</option>
+                  {filteredCylinderTypes.map((item) => <option value={item.id} key={item.id}>{gasLabel(item, language)}</option>)}
+                </select>
+              </label>
+              <label>
+                {t.notes}
                 <input value={form.notes} onChange={(event) => updateForm("notes", event.target.value)} placeholder="Empty cylinder exchange, urgent, call before arrival" />
               </label>
               <div className="quantity-card">
-                <span>Quantity</span>
+                <span>{t.quantity}</span>
                 <button onClick={() => updateForm("quantity", Math.max(1, form.quantity - 1))} aria-label="Decrease quantity"><Minus size={18} /></button>
                 <strong>{form.quantity}</strong>
                 <button onClick={() => updateForm("quantity", form.quantity + 1)} aria-label="Increase quantity"><Plus size={18} /></button>
@@ -731,8 +856,8 @@ function App() {
             <div className="payment-panel">
               <div className="payment-heading">
                 <div>
-                  <p className="eyebrow">Payment confirmation</p>
-                  <h3>Choose how the customer will pay</h3>
+                  <p className="eyebrow">{t.paymentConfirmation}</p>
+                  <h3>{t.choosePayment}</h3>
                 </div>
                 <WalletCards size={22} />
               </div>
@@ -745,7 +870,7 @@ function App() {
                     type="button"
                   >
                     <strong>{method.name}</strong>
-                    <span>{method.id === "cash" ? "Collect on delivery" : "Paid before dispatch"}</span>
+                    <span>{method.id === "cash" ? t.collectOnDelivery : t.paidBeforeDispatch}</span>
                   </button>
                 ))}
               </div>
@@ -765,7 +890,7 @@ function App() {
               {selectedPayment && selectedPayment.id !== "cash" && (
                 <div className="payment-fields">
                   <label>
-                    Payment phone
+                    {t.paymentPhone}
                     <TanzaniaPhoneInput value={form.paymentPhone || form.phone} onChange={(value) => updateForm("paymentPhone", value)} />
                   </label>
                   <label>
@@ -781,18 +906,33 @@ function App() {
               {selectedPayment?.id === "cash" && (
                 <div className="cash-warning">
                   <AlertTriangle size={18} />
-                  <span>Cash orders dispatch as cash pending. Manager must confirm rider collection after delivery.</span>
+                  <span>Cash orders are paid to the rider when the gas is delivered.</span>
                 </div>
               )}
+              <div className="promo-row">
+                <label>
+                  {t.promo}
+                  <input
+                    value={form.promoCode}
+                    onChange={(event) => updateForm("promoCode", event.target.value.toUpperCase())}
+                    placeholder="GAS10 or KARIBU"
+                  />
+                </label>
+                <div className={activePromo ? "promo-result active" : "promo-result"}>
+                  <Gift size={17} />
+                  <span>{activePromo ? `${activePromo.label} applied` : "Promo optional"}</span>
+                </div>
+              </div>
             </div>
 
             <div className="checkout-row">
               <div>
-                <span>Total</span>
-                <strong>{money((selectedCylinder?.price || 0) * form.quantity)}</strong>
+                <span>{t.total}</span>
+                <strong>{money(total)}</strong>
+                {discount > 0 && <small>Saved {money(discount)}</small>}
               </div>
               <button className="primary-action" onClick={placeOrder} disabled={isSubmittingOrder}>
-                <Send size={18} /> {isSubmittingOrder ? "Finding map..." : "Place order"}
+                <Send size={18} /> {isSubmittingOrder ? t.findingMap : t.placeOrder}
               </button>
             </div>
             {dispatchMessage.text && (
@@ -807,24 +947,24 @@ function App() {
             {!canMatchStore && (
               <div className="service-waiting">
                 <Clock3 size={34} />
-                <p className="eyebrow">Customer service</p>
-                <h2>{hasMappedDeliveryPlace ? "Choose gas type" : "No store selected yet"}</h2>
-                  <p>{hasMappedDeliveryPlace ? "Select the gas type. The app will then choose the nearest store that can serve the order." : "Tap the location pin in the exact address field first. The app will not choose any store before the real location is available."}</p>
+                <p className="eyebrow">{t.deliveryPoint}</p>
+                <h2>{hasMappedDeliveryPlace ? t.chooseGasType : t.noDeliveryPoint}</h2>
+                  <p>{hasMappedDeliveryPlace ? "Select the gas type. The app will then choose the nearest available depot for your order." : "Tap the location pin in the exact address field first. The app will not choose a depot before the real location is available."}</p>
               </div>
             )}
             {canMatchStore && bestStore && (
               <>
-                <p className="eyebrow">Dispatch match</p>
+                <p className="eyebrow">{t.nearestDepot}</p>
                 <h2>{bestStore.name}</h2>
                 <div className="route-box">
                   <Store size={22} />
                   <span>{bestStore.zone}</span>
                   <Route size={20} />
-                  <span>{form.zone || "Current location"}</span>
+                  <span>{form.zone || t.currentLocation}</span>
                 </div>
                 <div className="eta-number">
                   <strong>{deliveryMinutesEstimate(bestStore, formDestination)} min</strong>
-                  <span>Live tracking starts when the order is placed</span>
+                  <span>{t.liveTrackingStarts}</span>
                 </div>
                 <div className="assignment-card">
                   <Bike size={20} />
@@ -837,7 +977,7 @@ function App() {
                   {storeOptions.slice(0, 4).map((store) => (
                     <div className={store.canServe ? "mini-row" : "mini-row blocked"} key={store.id}>
                       <span>{store.name}</span>
-                      <strong>{store.canServe ? "Available" : "No stock"}</strong>
+                      <strong>{store.canServe ? t.available : t.noStock}</strong>
                     </div>
                   ))}
                 </div>
@@ -847,48 +987,22 @@ function App() {
         </section>
       )}
 
-      {view === "manager" && (
-        <section className="workspace manager-grid">
-          <Metric icon={PackageCheck} label="Active orders" value={activeOrders.length} />
-          <Metric icon={CheckCircle2} label="Delivered today" value={deliveredToday} />
-          <Metric icon={WalletCards} label="Revenue today" value={money(revenue)} />
-          <Metric icon={AlertTriangle} label="Low stock alerts" value={lowStockStores.length} />
-
-          <div className="panel orders-panel">
-            <div className="section-heading">
-              <div>
-                <p className="eyebrow">Dispatch queue</p>
-                <h2>Orders that must not be late</h2>
-              </div>
-              <button className="ghost-action" onClick={resetDemo}><RefreshCcw size={16} /> Reset demo</button>
-            </div>
-            <OrderTable orders={orders} onAdvance={advanceOrder} />
-          </div>
-        </section>
-      )}
-
-      {view === "rider" && (
-        <RiderApp
-          orders={orders}
-          riderLocations={riderLocations}
-          onUseGps={useRiderBrowserGps}
-          onAdvance={advanceOrder}
-        />
-      )}
-
-      {view === "stores" && (
-        <section className="workspace stores-grid">
-          {stores.map((store) => (
-            <StoreCard key={store.id} store={store} />
-          ))}
-        </section>
-      )}
-
       {view === "tracking" && (
         <section className="workspace customer-tracking-layout">
           <div className="tracking-experience">
-            {trackingOrder && <LiveMap order={trackingOrder} riderLocation={riderLocations[trackingOrder.riderId]} nowMs={nowMs} />}
-            {!trackingOrder && <div className="empty-state"><CheckCircle2 size={28} /> Place an order to track your gas.</div>}
+            {trackingOrder && (
+              <LiveMap
+                order={trackingOrder}
+                riderLocation={riderLocations[trackingOrder.riderId]}
+                nowMs={nowMs}
+                language={language}
+                t={t}
+                onConfirmDelivered={confirmDelivered}
+                onRate={rateOrder}
+                onReorder={reorder}
+              />
+            )}
+            {!trackingOrder && <div className="empty-state"><CheckCircle2 size={28} /> {t.placeToTrack}</div>}
           </div>
         </section>
       )}
@@ -896,7 +1010,7 @@ function App() {
   );
 }
 
-function LiveMap({ order, riderLocation, nowMs }) {
+function LiveMap({ order, riderLocation, nowMs, language, t, onConfirmDelivered, onRate, onReorder }) {
   const store = stores.find((item) => item.id === order.storeId) || stores[0];
   const rider = riders.find((item) => item.id === order.riderId) || riders[0];
   const cylinder = cylinderTypes.find((item) => item.id === order.cylinder);
@@ -916,6 +1030,21 @@ function LiveMap({ order, riderLocation, nowMs }) {
       ? "Rider location is updating on the map."
       : "Tracking route from pickup to your dropoff.";
   const riderInitials = rider.name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("");
+  const receiptText = [
+    "GasFlow Digital Receipt",
+    `Order: ${order.id}`,
+    `Customer: ${order.customer}`,
+    `Gas: ${order.quantity} x ${cylinder ? gasLabel(cylinder, language) : ""}`,
+    `Delivery: ${order.address}, ${order.zone}`,
+    `Depot: ${store.name}`,
+    `Rider: ${rider.name}`,
+    `Payment: ${payment.name} - ${order.paymentStatus}`,
+    `Subtotal: ${money(order.subtotal || 0)}`,
+    `Discount: ${money(order.discount || 0)}`,
+    `Total: ${money(order.total || 0)}`,
+    `Loyalty points earned: ${order.earnedPoints || 0}`
+  ].join("\n");
+  const receiptHref = `data:text/plain;charset=utf-8,${encodeURIComponent(receiptText)}`;
 
   return (
     <div className="live-map-stack">
@@ -980,146 +1109,58 @@ function LiveMap({ order, riderLocation, nowMs }) {
 
           <div className="customer-summary-list compact">
             <div><span>Order</span><strong>{order.id}</strong></div>
-            <div><span>Gas</span><strong>{order.quantity} x {cylinder?.label}</strong></div>
+            <div><span>Gas</span><strong>{order.quantity} x {cylinder ? gasLabel(cylinder, language) : ""}</strong></div>
             <div><span>Dropoff</span><strong>Your selected delivery point</strong></div>
             <div><span>Payment</span><strong>{payment.name} - {order.paymentStatus}</strong></div>
             <div><span>From</span><strong>{store.name}</strong></div>
+            <div><span>Total</span><strong>{money(order.total || 0)}</strong></div>
           </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
-function RiderApp({ orders, riderLocations, onUseGps, onAdvance }) {
-  const activeRiderOrders = orders.filter((order) => order.status !== "Delivered");
-
-  return (
-    <section className="workspace rider-app">
-      <div className="panel">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">Rider GPS</p>
-            <h2>Update live delivery location</h2>
+          <div className="receipt-panel">
+            <div>
+              <p className="eyebrow">{t.receipt}</p>
+              <strong>{order.id}</strong>
+              <span>{money(order.total || 0)} paid by {payment.name}</span>
+            </div>
+            <a className="ghost-action" href={receiptHref} download={`${order.id}-receipt.txt`}>
+              <Receipt size={17} /> {t.receipt}
+            </a>
           </div>
-        </div>
-        {!activeRiderOrders.length && (
-          <div className="empty-state"><Truck size={28} /> No active delivery assigned.</div>
-        )}
-        <div className="rider-order-list">
-          {activeRiderOrders.map((order) => {
-            const rider = riders.find((item) => item.id === order.riderId);
-            const store = stores.find((item) => item.id === order.storeId);
-            const location = riderLocations[order.riderId];
-            return (
-              <article className="rider-order-card" key={order.id}>
-                <div>
-                  <span className="order-id">{order.id}</span>
-                  <h3>{order.address}, {order.zone}</h3>
-                  <p>{rider?.name} - {rider?.vehicle}</p>
-                  <p>Pickup: {store?.name}</p>
-                  <p>{location ? `Last GPS: ${location.lat.toFixed(5)}, ${location.lng.toFixed(5)}` : "GPS not shared yet"}</p>
-                </div>
-                <div className="rider-actions">
-                  <button className="primary-action" onClick={() => onUseGps(order.id)}>
-                    <MapPin size={17} /> Share my GPS
-                  </button>
-                  <button className="ghost-action" onClick={() => onAdvance(order.id)}>
-                    <CheckCircle2 size={17} /> Next status
-                  </button>
-                </div>
-              </article>
-            );
-          })}
-        </div>
-      </div>
-    </section>
-  );
-}
 
-function OrderTable({ orders, onAdvance, compact = false }) {
-  if (!orders.length) {
-    return <div className="empty-state"><CheckCircle2 size={28} /> All deliveries are complete.</div>;
-  }
-
-  return (
-    <div className={compact ? "order-stack compact" : "order-stack"}>
-      {orders.map((order) => {
-        const store = stores.find((item) => item.id === order.storeId);
-        const rider = riders.find((item) => item.id === order.riderId);
-        const cylinder = cylinderTypes.find((item) => item.id === order.cylinder);
-        const payment = getPaymentMethod(order.payment);
-        const stageIndex = deliveryStages.indexOf(order.status);
-        return (
-          <article className="order-card" key={order.id}>
-            <div className="order-main">
-              <span className="order-id">{order.id}</span>
-              <strong>{order.customer}</strong>
-              <span>{order.phone}</span>
-            </div>
-            <div>
-              <strong>{order.quantity} x {cylinder?.label}</strong>
-              <span>{order.address}, {order.zone}</span>
-            </div>
-            <div>
-              <strong>{payment.name} - {order.paymentStatus}</strong>
-              <span>{order.paymentReference}</span>
-            </div>
-            <div>
-              <strong>{store?.name}</strong>
-              <span>{rider?.name} - {rider?.vehicle}</span>
-            </div>
-            <div className="progress-cell">
-              <span className="status-pill">{order.status}</span>
-              <div className="stage-bar" style={{ "--stage": `${Math.max(12, (stageIndex / (deliveryStages.length - 1)) * 100)}%` }}><span /></div>
-            </div>
-            <button className="primary-action small" onClick={() => onAdvance(order.id)} disabled={order.status === "Delivered"}>
-              Next status
+          <div className="tracking-actions">
+            {order.status !== "Delivered" && (
+              <button className="primary-action" type="button" onClick={() => onConfirmDelivered(order.id)}>
+                <CheckCircle2 size={17} /> {t.confirmDelivered}
+              </button>
+            )}
+            <button className="ghost-action" type="button" onClick={() => onReorder(order)}>
+              <Plus size={17} /> {t.reorder}
             </button>
-          </article>
-        );
-      })}
-    </div>
-  );
-}
+          </div>
 
-function StoreCard({ store }) {
-  const totalStock = Object.values(store.stock).reduce((sum, value) => sum + value, 0);
-  const low = Object.entries(store.stock).filter(([, value]) => value <= 3).map(([key]) => key);
-
-  return (
-    <article className="store-card">
-      <div className="store-card-head">
-        <span><Store size={20} /></span>
-        <div>
-          <strong>{store.name}</strong>
-          <small>{store.zone}</small>
+          {order.status === "Delivered" && (
+            <div className="rating-panel">
+              <div>
+                <p className="eyebrow">{t.ratingTitle}</p>
+                <strong>{order.rating ? `${order.rating}/5` : "No rating yet"}</strong>
+              </div>
+              <div className="star-row" aria-label="Rate order">
+                {[1, 2, 3, 4, 5].map((rating) => (
+                  <button
+                    type="button"
+                    className={rating <= (order.rating || 0) ? "active" : ""}
+                    key={rating}
+                    onClick={() => onRate(order.id, rating)}
+                    aria-label={`Rate ${rating} stars`}
+                  >
+                    <Star size={19} />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
-      <div className="store-metrics">
-        <div><span>Stock</span><strong>{totalStock}</strong></div>
-        <div><span>Riders</span><strong>{store.riders}</strong></div>
-        <div><span>Area</span><strong>{store.zone}</strong></div>
-      </div>
-      <div className="stock-lines">
-        {Object.entries(store.stock).map(([key, value]) => (
-          <div key={key}>
-            <span>{key}</span>
-            <strong>{value}</strong>
-          </div>
-        ))}
-      </div>
-      {low.length > 0 && <div className="stock-alert"><AlertTriangle size={16} /> Restock {low.join(", ")}</div>}
-    </article>
-  );
-}
-
-function Metric({ icon: Icon, label, value }) {
-  return (
-    <div className="metric">
-      <Icon size={22} />
-      <span>{label}</span>
-      <strong>{value}</strong>
     </div>
   );
 }

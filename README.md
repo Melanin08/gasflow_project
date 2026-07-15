@@ -1,6 +1,6 @@
 # Zanzibar LPG Stores
 
-React frontend for checking LPG ordering, store selection, delivery tracking, and admin/store operations for Fuoni, Bububu, and Mombasa gas stores in Zanzibar.
+React frontend for a customer gas ordering and delivery tracking flow in Zanzibar, including LPG, natural gas refill, industrial/bulk orders, mobile money, card/bank, cash on delivery, promo codes, loyalty points, push notifications, digital receipts, ratings, reorder, and English/Swahili language switching.
 
 ## Requirements
 
