@@ -1,4 +1,4 @@
-GasFlow React frontend requirements
+GasFlow project requirements
 
 System requirements
 - Node.js 20 or newer
@@ -9,6 +9,7 @@ Install dependencies
 
 Run locally
 - npm.cmd run dev
+- npm.cmd run server
 
 Build production files
 - npm.cmd run build
@@ -22,3 +23,5 @@ Project dependencies are managed in package.json and locked in package-lock.json
 - react ^18.3.1
 - react-dom ^18.3.1
 - lucide-react ^0.468.0
+
+Python server dependencies are in server/requirements.txt.

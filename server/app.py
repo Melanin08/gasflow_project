@@ -9,7 +9,7 @@ def create_app():
     def health():
         return jsonify({"status": "ok"})
 
-    # Example API proxy path; replace with your real routes in `backend/src`
+    # Example API path; replace with real route modules in `server/src`.
     @app.route("/api/example")
     def example():
         return jsonify({"message": "Hello from Flask backend"})
@@ -20,4 +20,4 @@ def create_app():
 app = create_app()
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5001)))
