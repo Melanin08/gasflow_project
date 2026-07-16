@@ -31,6 +31,45 @@ button {
   background: #fff7ed;
 }
 
+.tracking-shell {
+  height: 100vh;
+  overflow: hidden;
+  padding: 14px;
+}
+
+.tracking-shell .topbar {
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.tracking-shell .brand-mark {
+  width: 42px;
+  height: 42px;
+}
+
+.tracking-shell .app-back-action {
+  width: 38px;
+  height: 38px;
+}
+
+.tracking-shell h1 {
+  font-size: clamp(1.35rem, 2.4vw, 2rem);
+}
+
+.tracking-shell .customer-app-card {
+  min-height: 38px;
+}
+
+.tracking-shell .view-tabs {
+  margin-bottom: 8px;
+  padding: 4px;
+}
+
+.tracking-shell .view-tabs button {
+  min-height: 34px;
+  padding: 0 10px;
+}
+
 .welcome-shell {
   display: grid;
   min-height: 100vh;
@@ -1133,7 +1172,7 @@ select:focus {
 }
 
 .customer-tracking-layout {
-  max-width: 1180px;
+  max-width: min(1500px, 100%);
 }
 
 .tracking-experience {
@@ -1146,9 +1185,69 @@ select:focus {
 
 .real-tracking-map {
   position: relative;
-  min-height: 660px;
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
   background: #edf7ef;
+}
+
+.leaflet-tracking-map {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.leaflet-stop-label {
+  display: grid;
+  width: max-content !important;
+  min-width: 90px;
+  gap: 1px;
+  border: 0;
+  border-radius: 8px;
+  padding: 7px 9px;
+  background: #1f2937;
+  color: #ffffff;
+  box-shadow: 0 14px 28px rgba(23, 34, 29, 0.22);
+  transform: translate(-50%, -118%);
+}
+
+.leaflet-stop-label::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -7px;
+  width: 14px;
+  height: 14px;
+  background: inherit;
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.leaflet-stop-label span {
+  font-size: 0.72rem;
+  font-weight: 850;
+  opacity: 0.9;
+}
+
+.leaflet-stop-label strong {
+  font-size: 0.96rem;
+}
+
+.leaflet-stop-label.dropoff-label {
+  background: #111827;
+}
+
+.map-route-loading {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  z-index: 5;
+  border-radius: 999px;
+  padding: 9px 12px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #241407;
+  font-size: 0.78rem;
+  font-weight: 900;
+  box-shadow: 0 12px 28px rgba(23, 34, 29, 0.14);
 }
 
 .map-tile-grid {
@@ -1357,23 +1456,25 @@ select:focus {
 
 .live-map-stack {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(380px, 440px);
+  height: calc(100vh - 154px);
+  min-height: 0;
   gap: 0;
 }
 
 .tracking-bottom-sheet {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 5;
+  position: relative;
+  z-index: 1;
   display: grid;
-  gap: 10px;
-  max-height: 34%;
-  overflow: auto;
-  border-radius: 24px 24px 0 0;
-  padding: 10px 18px 16px;
+  align-content: start;
+  gap: 7px;
+  min-width: 0;
+  overflow: visible;
+  border-left: 1px solid #fed7aa;
+  border-radius: 0;
+  padding: 12px;
   background: #ffffff;
-  box-shadow: 0 -20px 44px rgba(23, 34, 29, 0.18);
+  box-shadow: none;
 }
 
 .sheet-handle {
@@ -1388,45 +1489,45 @@ select:focus {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 14px;
+  gap: 10px;
 }
 
 .tracking-hero-row h2 {
-  margin-bottom: 4px;
-  font-size: clamp(1.18rem, 3vw, 1.55rem);
+  margin-bottom: 2px;
+  font-size: 1.05rem;
 }
 
 .tracking-hero-row span {
   color: #7c5a3a;
-  font-size: 0.88rem;
+  font-size: 0.74rem;
   font-weight: 800;
 }
 
 .eta-badge {
   display: inline-flex;
-  min-width: 88px;
-  min-height: 52px;
+  min-width: 76px;
+  min-height: 40px;
   align-items: center;
   justify-content: center;
   border-radius: 8px;
   background: #c2410c;
   color: #ffffff;
-  font-size: 1.22rem;
+  font-size: 0.96rem;
 }
 
 .tracking-steps {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 7px;
+  gap: 5px;
 }
 
 .tracking-steps span {
-  min-height: 30px;
+  min-height: 24px;
   border-radius: 999px;
-  padding: 6px 8px;
+  padding: 4px 6px;
   background: #ffedd5;
   color: #7c5a3a;
-  font-size: 0.76rem;
+  font-size: 0.66rem;
   font-weight: 900;
   text-align: center;
 }
@@ -1438,19 +1539,19 @@ select:focus {
 
 .rider-card {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) 42px 42px;
+  grid-template-columns: auto minmax(0, 1fr) 38px 38px;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   border: 1px solid #fed7aa;
   border-radius: 8px;
-  padding: 9px 10px;
+  padding: 7px 8px;
   background: #f8faf8;
 }
 
 .rider-avatar {
   display: inline-flex;
-  width: 46px;
-  height: 46px;
+  width: 34px;
+  height: 34px;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
@@ -1466,13 +1567,13 @@ select:focus {
 
 .rider-card span {
   color: #7c5a3a;
-  font-size: 0.86rem;
+  font-size: 0.78rem;
 }
 
 .round-action {
   display: inline-flex;
-  width: 42px;
-  height: 42px;
+  width: 34px;
+  height: 34px;
   align-items: center;
   justify-content: center;
   border: 1px solid #fdba74;
@@ -1487,10 +1588,10 @@ select:focus {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   border: 1px solid #fed7aa;
   border-radius: 8px;
-  padding: 10px;
+  padding: 7px 8px;
   background: #ffffff;
 }
 
@@ -1502,14 +1603,22 @@ select:focus {
 
 .receipt-panel span {
   color: #7c5a3a;
-  font-size: 0.86rem;
+  font-size: 0.78rem;
   font-weight: 800;
 }
 
 .tracking-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  gap: 6px;
+}
+
+.tracking-bottom-sheet .primary-action,
+.tracking-bottom-sheet .ghost-action {
+  min-height: 34px;
+  gap: 6px;
+  padding: 0 10px;
+  font-size: 0.86rem;
 }
 
 .star-row {
@@ -1539,21 +1648,21 @@ select:focus {
 .map-facts {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  gap: 5px;
 }
 
 .map-facts div {
   display: grid;
-  gap: 4px;
+  gap: 2px;
   border: 1px solid #fed7aa;
   border-radius: 8px;
-  padding: 10px;
+  padding: 6px 7px;
   background: #ffffff;
 }
 
 .map-facts span {
   color: #7c5a3a;
-  font-size: 0.78rem;
+  font-size: 0.62rem;
   font-weight: 850;
   text-transform: uppercase;
 }
@@ -1747,8 +1856,14 @@ select:focus {
     grid-template-columns: 1fr;
   }
 
+  .live-map-stack {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+
   .real-tracking-map {
-    min-height: 680px;
+    height: 58vh;
+    min-height: 420px;
   }
 
   .bolt-route-bar {
@@ -1762,25 +1877,42 @@ select:focus {
   }
 
   .tracking-bottom-sheet {
-    right: 0;
-    bottom: 0;
-    left: 0;
-    max-height: 38%;
-    padding: 12px 12px 16px;
+    border-top: 1px solid #fed7aa;
+    border-left: 0;
+    max-height: none;
+    overflow: visible;
+    padding: 12px;
   }
 
   .tracking-hero-row {
-    display: grid;
+    display: flex;
+    gap: 8px;
   }
 
-  .tracking-steps,
   .customer-summary-list.compact {
     grid-template-columns: 1fr;
   }
 
-  .map-facts,
   .rider-gps-grid {
     grid-template-columns: 1fr;
+  }
+
+  .tracking-steps {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .map-facts {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .tracking-steps span,
+  .map-facts span {
+    font-size: 0.62rem;
+  }
+
+  .receipt-panel,
+  .rating-panel {
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 }
 

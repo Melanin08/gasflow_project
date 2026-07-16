@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -44,7 +44,6 @@ import {
 } from "./data/gasflowData.js";
 import { text } from "./i18n/translations.js";
 import {
-  createTrackingMapView,
   deliveryEtaEstimate,
   distanceKm,
   distanceText,
@@ -73,6 +72,40 @@ import {
   searchTanzaniaPlaces,
 } from "./utils/gasflowLogic.js";
 import "./styles.css";
+
+const LEAFLET_CSS_URL = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+const LEAFLET_JS_URL = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+let leafletLoadPromise;
+
+function loadLeaflet() {
+  if (window.L) return Promise.resolve(window.L);
+  if (leafletLoadPromise) return leafletLoadPromise;
+
+  leafletLoadPromise = new Promise((resolve, reject) => {
+    if (!document.querySelector(`link[href="${LEAFLET_CSS_URL}"]`)) {
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = LEAFLET_CSS_URL;
+      document.head.appendChild(link);
+    }
+
+    const existingScript = document.querySelector(`script[src="${LEAFLET_JS_URL}"]`);
+    if (existingScript) {
+      existingScript.addEventListener("load", () => resolve(window.L), { once: true });
+      existingScript.addEventListener("error", reject, { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = LEAFLET_JS_URL;
+    script.async = true;
+    script.onload = () => resolve(window.L);
+    script.onerror = reject;
+    document.body.appendChild(script);
+  });
+
+  return leafletLoadPromise;
+}
 
 export default function App() {
   const [hasEnteredApp, setHasEnteredApp] = useState(false);
@@ -600,7 +633,7 @@ export default function App() {
   }
 
   return (
-    <main className="app-shell">
+    <main className={`app-shell${view === "tracking" ? " tracking-shell" : ""}`}>
       <header className="topbar">
         <button className="round-action app-back-action" type="button" onClick={() => setHasEnteredApp(false)} aria-label="Back">
           <ArrowLeft size={18} />
@@ -1020,6 +1053,145 @@ export default function App() {
   );
 }
 
+function LeafletTrackingMap({ store, destination, riderLocation, routeLocations, etaDisplay, t }) {
+  const mapElementRef = useRef(null);
+  const mapInstanceRef = useRef(null);
+  const layersRef = useRef([]);
+  const [isReady, setIsReady] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    loadLeaflet()
+      .then((L) => {
+        if (cancelled || !mapElementRef.current || mapInstanceRef.current) return;
+        const center = [(store.lat + destination.lat) / 2, (store.lng + destination.lng) / 2];
+        mapInstanceRef.current = L.map(mapElementRef.current, {
+          attributionControl: true,
+          zoomControl: false
+        }).setView(center, 13);
+
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          maxZoom: 19,
+          attribution: "&copy; OpenStreetMap"
+        }).addTo(mapInstanceRef.current);
+        setIsReady(true);
+      })
+      .catch(() => setIsReady(false));
+
+    return () => {
+      cancelled = true;
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
+  }, [destination.lat, destination.lng, store.lat, store.lng]);
+
+  useEffect(() => {
+    const L = window.L;
+    const map = mapInstanceRef.current;
+    if (!isReady || !L || !map) return;
+
+    layersRef.current.forEach((layer) => layer.remove());
+    layersRef.current = [];
+
+    const routeLatLngs = routeLocations.map((location) => [location.lat, location.lng]);
+    const fitPoints = routeLatLngs.length > 1
+      ? [...routeLatLngs]
+      : [[store.lat, store.lng], [destination.lat, destination.lng]];
+
+    if (routeLatLngs.length > 1) {
+      layersRef.current.push(
+        L.polyline(routeLatLngs, {
+          color: "#ffffff",
+          opacity: 0.95,
+          weight: 11,
+          lineCap: "round",
+          lineJoin: "round"
+        }).addTo(map)
+      );
+      layersRef.current.push(
+        L.polyline(routeLatLngs, {
+          color: "#166534",
+          opacity: 1,
+          weight: 7,
+          lineCap: "round",
+          lineJoin: "round"
+        }).addTo(map)
+      );
+    }
+
+    layersRef.current.push(
+      L.circleMarker([store.lat, store.lng], {
+        color: "#ffffff",
+        fillColor: "#166534",
+        fillOpacity: 1,
+        radius: 9,
+        weight: 4
+      }).addTo(map)
+    );
+    layersRef.current.push(
+      L.circleMarker([destination.lat, destination.lng], {
+        color: "#ffffff",
+        fillColor: "#111827",
+        fillOpacity: 1,
+        radius: 9,
+        weight: 4
+      }).addTo(map)
+    );
+
+    if (riderLocation) {
+      layersRef.current.push(
+        L.circleMarker([riderLocation.lat, riderLocation.lng], {
+          color: "#ffffff",
+          fillColor: "#1f2937",
+          fillOpacity: 1,
+          radius: 8,
+          weight: 4
+        }).addTo(map)
+      );
+      fitPoints.push([riderLocation.lat, riderLocation.lng]);
+    }
+
+    layersRef.current.push(
+      L.marker([store.lat, store.lng], {
+        icon: L.divIcon({
+          className: "leaflet-stop-label pickup-label",
+          html: `<span>${t.pickup}</span><strong>${store.zone}</strong>`
+        })
+      }).addTo(map)
+    );
+    layersRef.current.push(
+      L.marker([destination.lat, destination.lng], {
+        icon: L.divIcon({
+          className: "leaflet-stop-label dropoff-label",
+          html: `<span>${t.dropoff}</span><strong>${etaDisplay}</strong>`
+        })
+      }).addTo(map)
+    );
+
+    map.fitBounds(L.latLngBounds(fitPoints), {
+      animate: false,
+      paddingTopLeft: [48, 86],
+      paddingBottomRight: [48, 48],
+      maxZoom: 15
+    });
+    window.setTimeout(() => map.invalidateSize(), 0);
+  }, [destination.lat, destination.lng, etaDisplay, isReady, riderLocation, routeLocations, store.lat, store.lng, store.zone, t.dropoff, t.pickup]);
+
+  return (
+    <>
+      <div className="bolt-route-bar">
+        <span>{store.name}</span>
+        <Route size={18} />
+        <strong>{destination.label}</strong>
+      </div>
+      <div className="leaflet-tracking-map" ref={mapElementRef} />
+    </>
+  );
+}
+
 function LiveMap({ order, riderLocation, nowMs, language, t, onConfirmDelivered, onRate, onReorder }) {
   const store = stores.find((item) => item.id === order.storeId) || stores[0];
   const rider = riders.find((item) => item.id === order.riderId) || riders[0];
@@ -1029,8 +1201,7 @@ function LiveMap({ order, riderLocation, nowMs, language, t, onConfirmDelivered,
   const destination = orderDestination(order);
   const hasLiveGps = Boolean(riderLocation);
   const [routeState, setRouteState] = useState({ locations: [], distanceKm: null, status: "loading" });
-  const routeStart = hasLiveGps ? riderLocation : store;
-  const mapView = createTrackingMapView(store, destination, hasLiveGps ? riderLocation : null, routeState.locations);
+  const routeStart = store;
   const hasRoadRoute = routeState.status === "ready" && routeState.locations.length > 2;
   const savedRoadDistanceKm = order.roadDistanceKm || roadDistanceKm(store, destination);
   const etaRangeDisplay = order.initialEtaMinMinutes && order.initialEtaMinutes
@@ -1059,7 +1230,7 @@ function LiveMap({ order, riderLocation, nowMs, language, t, onConfirmDelivered,
         return response.json();
       })
       .then((data) => {
-        const route = data.routes?.[0];
+        const route = [...(data.routes || [])].sort((a, b) => (a.distance || Infinity) - (b.distance || Infinity))[0];
         const locations = routeCoordinatesToLocations(route);
         setRouteState({
           locations: locations.length > 1 ? locations : [routeStart, destination],
@@ -1098,125 +1269,102 @@ function LiveMap({ order, riderLocation, nowMs, language, t, onConfirmDelivered,
   return (
     <div className="live-map-stack">
       <div className="real-tracking-map">
-        <div className="map-tile-grid" aria-hidden="true">
-          {mapView.tiles.map((tile) => (
-            <img
-              className="map-tile"
-              key={tile.key}
-              src={tile.url}
-              style={tile.style}
-              alt=""
-              onError={(event) => {
-                event.currentTarget.style.visibility = "hidden";
-              }}
-            />
-          ))}
-        </div>
-        <div className="bolt-route-bar">
-          <span>{store.name}</span>
-          <Route size={18} />
-          <strong>{destination.label}</strong>
-        </div>
-        <svg className="route-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-          {hasRoadRoute && <path className="route-shadow" d={mapView.remainingPath} />}
-          {hasRoadRoute && <path className="route-remaining" d={mapView.remainingPath} />}
-          {hasRoadRoute && hasLiveGps && <path className="route-completed" d={mapView.completedPath} />}
-        </svg>
-        <span className="map-pin store-pin" style={mapView.storePoint}><Store size={15} /></span>
-        <span className="map-pin customer-pin" style={mapView.destinationPoint}><MapPin size={15} /></span>
-        {hasLiveGps && mapView.riderPoint && <span className="rider-pin" style={mapView.riderPoint}><Truck size={17} /></span>}
-        <div className="map-stop-label pickup-label" style={{ left: mapView.storePoint.left, top: `calc(${mapView.storePoint.top} - 58px)` }}>
-          <span>{t.pickup}</span>
-          <strong>{store.zone}</strong>
-        </div>
-        <div className="map-stop-label dropoff-label" style={{ left: mapView.destinationPoint.left, top: `calc(${mapView.destinationPoint.top} - 58px)` }}>
-          <span>{t.dropoff}</span>
-          <strong>{etaDisplay}</strong>
-        </div>
+        <LeafletTrackingMap
+          store={store}
+          destination={destination}
+          riderLocation={hasLiveGps ? riderLocation : null}
+          routeLocations={hasRoadRoute ? routeState.locations : []}
+          etaDisplay={etaDisplay}
+          t={t}
+        />
+        {!hasRoadRoute && (
+          <div className="map-route-loading">
+            {routeState.status === "loading" ? "Loading road route" : "Road route unavailable"}
+          </div>
+        )}
         <div className="bolt-map-controls" aria-hidden="true">
           <button type="button"><MessageCircle size={18} /></button>
           <button type="button"><Route size={18} /></button>
         </div>
+      </div>
 
-        <div className="tracking-bottom-sheet">
-          <span className="sheet-handle" />
-          <div className="tracking-hero-row">
-            <div>
-              <p className="eyebrow">{t.gasDelivery}</p>
-              <h2>{statusTitle}</h2>
-              <span>{trackingNote}</span>
-            </div>
-            <strong className="eta-badge">{etaLabel}</strong>
+      <div className="tracking-bottom-sheet">
+        <div className="tracking-hero-row">
+          <div>
+            <p className="eyebrow">{t.gasDelivery}</p>
+            <h2>{statusTitle}</h2>
+            <span>{trackingNote}</span>
           </div>
-
-          <div className="tracking-steps">
-            {deliveryStages.slice(1).map((stage) => (
-              <span className={deliveryStages.indexOf(stage) <= deliveryStages.indexOf(order.status) ? "active" : ""} key={stage}>
-                {stage}
-              </span>
-            ))}
-          </div>
-
-          <div className="map-facts">
-            <div><span>{t.route}</span><strong>{distanceText(displayedRouteDistanceKm)}</strong></div>
-            <div><span>{t.originalEta}</span><strong>{etaRangeDisplay}</strong></div>
-            <div><span>{t.gps}</span><strong>{hasLiveGps ? t.live : t.waiting}</strong></div>
-          </div>
-
-          <div className="rider-card">
-            <span className="rider-avatar">{riderInitials}</span>
-            <div>
-              <strong>{rider.name}</strong>
-              <span>{rider.vehicle}</span>
-            </div>
-            <a className="round-action" href={`tel:${rider.phone}`} aria-label={t.rider}><Phone size={17} /></a>
-            <a className="round-action" href={`sms:${rider.phone}`} aria-label={t.rider}><MessageCircle size={17} /></a>
-          </div>
-
-          <div className="receipt-panel">
-            <div>
-              <p className="eyebrow">{order.id}</p>
-              <strong>{order.id}</strong>
-              <span>{order.quantity} x {cylinder ? gasLabel(cylinder, language) : ""} - {money(order.total || 0)}</span>
-            </div>
-            <a className="ghost-action" href={receiptHref} download={`${order.id}-receipt.txt`}>
-              <Receipt size={17} /> {t.receipt}
-            </a>
-          </div>
-
-          <div className="tracking-actions">
-            {order.status !== "Delivered" && (
-              <button className="primary-action" type="button" onClick={() => onConfirmDelivered(order.id)}>
-                <CheckCircle2 size={17} /> {t.confirmDelivered}
-              </button>
-            )}
-            <button className="ghost-action" type="button" onClick={() => onReorder(order)}>
-              <Plus size={17} /> {t.reorder}
-            </button>
-          </div>
-
-          {order.status === "Delivered" && (
-            <div className="rating-panel">
-              <div>
-                <p className="eyebrow">{t.ratingTitle}</p>
-                <strong>{order.rating ? `${order.rating}/5` : "No rating yet"}</strong>
-              </div>
-              <div className="star-row" aria-label="Rate order">
-                {[1, 2, 3, 4, 5].map((rating) => (
-                  <button
-                    type="button"
-                    className={rating <= (order.rating || 0) ? "active" : ""}
-                    key={rating}
-                    onClick={() => onRate(order.id, rating)}
-                    aria-label={`Rate ${rating} stars`}
-                  >
-                    <Star size={19} />
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+          <strong className="eta-badge">{etaLabel}</strong>
         </div>
+
+        <div className="tracking-steps">
+          {deliveryStages.slice(1).map((stage) => (
+            <span className={deliveryStages.indexOf(stage) <= deliveryStages.indexOf(order.status) ? "active" : ""} key={stage}>
+              {stage}
+            </span>
+          ))}
+        </div>
+
+        <div className="map-facts">
+          <div><span>{t.route}</span><strong>{distanceText(displayedRouteDistanceKm)}</strong></div>
+          <div><span>{t.originalEta}</span><strong>{etaRangeDisplay}</strong></div>
+          <div><span>{t.gps}</span><strong>{hasLiveGps ? t.live : t.waiting}</strong></div>
+        </div>
+
+        <div className="rider-card">
+          <span className="rider-avatar">{riderInitials}</span>
+          <div>
+            <strong>{rider.name}</strong>
+            <span>{rider.vehicle}</span>
+          </div>
+          <a className="round-action" href={`tel:${rider.phone}`} aria-label={t.rider}><Phone size={17} /></a>
+          <a className="round-action" href={`sms:${rider.phone}`} aria-label={t.rider}><MessageCircle size={17} /></a>
+        </div>
+
+        <div className="receipt-panel">
+          <div>
+            <p className="eyebrow">{order.id}</p>
+            <strong>{order.id}</strong>
+            <span>{order.quantity} x {cylinder ? gasLabel(cylinder, language) : ""} - {money(order.total || 0)}</span>
+          </div>
+          <a className="ghost-action" href={receiptHref} download={`${order.id}-receipt.txt`}>
+            <Receipt size={17} /> {t.receipt}
+          </a>
+        </div>
+
+        <div className="tracking-actions">
+          {order.status !== "Delivered" && (
+            <button className="primary-action" type="button" onClick={() => onConfirmDelivered(order.id)}>
+              <CheckCircle2 size={17} /> {t.confirmDelivered}
+            </button>
+          )}
+          <button className="ghost-action" type="button" onClick={() => onReorder(order)}>
+            <Plus size={17} /> {t.reorder}
+          </button>
+        </div>
+
+        {order.status === "Delivered" && (
+          <div className="rating-panel">
+            <div>
+              <p className="eyebrow">{t.ratingTitle}</p>
+              <strong>{order.rating ? `${order.rating}/5` : "No rating yet"}</strong>
+            </div>
+            <div className="star-row" aria-label="Rate order">
+              {[1, 2, 3, 4, 5].map((rating) => (
+                <button
+                  type="button"
+                  className={rating <= (order.rating || 0) ? "active" : ""}
+                  key={rating}
+                  onClick={() => onRate(order.id, rating)}
+                  aria-label={`Rate ${rating} stars`}
+                >
+                  <Star size={19} />
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

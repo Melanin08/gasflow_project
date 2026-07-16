@@ -380,7 +380,7 @@ export function providerConfirmationReference(methodId) {
 
 export function routeApiUrl(from, to) {
   const coordinates = `${from.lng},${from.lat};${to.lng},${to.lat}`;
-  return `https://router.project-osrm.org/route/v1/driving/${coordinates}?overview=full&geometries=geojson`;
+  return `https://router.project-osrm.org/route/v1/driving/${coordinates}?overview=full&geometries=geojson&alternatives=true&steps=false`;
 }
 
 export function routeCoordinatesToLocations(route) {
