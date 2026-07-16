@@ -1,5 +1,12 @@
 import { paymentMethods, promoCodes, riders, stores, zanzibarPlaces, zones, zonePins } from "../data/gasflowData.js";
 
+export const zanzibarBounds = {
+  south: -6.55,
+  west: 39.05,
+  north: -5.65,
+  east: 39.75
+};
+
 export function money(value) {
   return `TZS ${value.toLocaleString("en-US")}`;
 }
@@ -68,6 +75,14 @@ export function placeToLocation(place) {
   };
 }
 
+export function isZanzibarLocation(location) {
+  return Boolean(location)
+    && location.lat >= zanzibarBounds.south
+    && location.lat <= zanzibarBounds.north
+    && location.lng >= zanzibarBounds.west
+    && location.lng <= zanzibarBounds.east;
+}
+
 export function placeFromMapResult(result) {
   const address = result.address || {};
   const name = result.name || address.road || address.neighbourhood || address.suburb || result.display_name.split(",")[0];
@@ -89,17 +104,23 @@ export function placeFromMapResult(result) {
   };
 }
 
+function zanzibarSearchParams(query, limit = "7") {
+  return new URLSearchParams({
+    format: "jsonv2",
+    addressdetails: "1",
+    limit,
+    countrycodes: "tz",
+    viewbox: `${zanzibarBounds.west},${zanzibarBounds.north},${zanzibarBounds.east},${zanzibarBounds.south}`,
+    bounded: "1",
+    q: `${query}, Zanzibar, Tanzania`
+  });
+}
+
 export async function searchTanzaniaPlaces(query, signal) {
   const trimmedQuery = query.trim();
   if (trimmedQuery.length < 3) return [];
 
-  const params = new URLSearchParams({
-    format: "jsonv2",
-    addressdetails: "1",
-    limit: "7",
-    countrycodes: "tz",
-    q: `${trimmedQuery}, Tanzania`
-  });
+  const params = zanzibarSearchParams(trimmedQuery);
   const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, {
     headers: { Accept: "application/json" },
     signal
@@ -109,7 +130,9 @@ export async function searchTanzaniaPlaces(query, signal) {
     throw new Error("Map search failed");
   }
 
-  return (await response.json()).map(placeFromMapResult);
+  return (await response.json())
+    .map(placeFromMapResult)
+    .filter(isZanzibarLocation);
 }
 
 export function getLocalPlaceSuggestions(value) {
@@ -143,9 +166,14 @@ export function zonePin(zone) {
 
 export function orderDestination(order) {
   const zone = zonePin(order.zone);
-  return {
+  const savedLocation = {
     lat: typeof order.deliveryLat === "number" ? order.deliveryLat : zone.lat,
-    lng: typeof order.deliveryLng === "number" ? order.deliveryLng : zone.lng,
+    lng: typeof order.deliveryLng === "number" ? order.deliveryLng : zone.lng
+  };
+  const location = isZanzibarLocation(savedLocation) ? savedLocation : zone;
+  return {
+    lat: location.lat,
+    lng: location.lng,
     label: order.address
   };
 }
@@ -193,14 +221,8 @@ export function distanceText(kilometers) {
 }
 
 export async function geocodeDeliveryAddress(address, zone) {
-  const query = zone ? `${address}, ${zone}, Tanzania` : `${address}, Tanzania`;
-  const params = new URLSearchParams({
-    format: "jsonv2",
-    addressdetails: "1",
-    limit: "1",
-    countrycodes: "tz",
-    q: query
-  });
+  const query = zone ? `${address}, ${zone}` : address;
+  const params = zanzibarSearchParams(query, "1");
   const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, {
     headers: { Accept: "application/json" }
   });
@@ -214,7 +236,8 @@ export async function geocodeDeliveryAddress(address, zone) {
 
   if (!match) return null;
 
-  return placeToLocation(placeFromMapResult(match));
+  const place = placeFromMapResult(match);
+  return isZanzibarLocation(place) ? placeToLocation(place) : null;
 }
 
 export async function resolveDeliveryLocation(address, zone, currentLocation) {
@@ -227,8 +250,7 @@ export async function resolveDeliveryLocation(address, zone, currentLocation) {
     if (!currentLocation) throw new Error("Map search failed");
   }
 
-  const localPlace = findLocalPlace(address);
-  return currentLocation || (localPlace ? placeToLocation(localPlace) : null);
+  return null;
 }
 
 export function remainingEtaSeconds(order, currentLocation, destination, nowMs) {
@@ -385,4 +407,15 @@ export function routeApiUrl(from, to) {
 
 export function routeCoordinatesToLocations(route) {
   return route?.geometry?.coordinates?.map(([lng, lat]) => ({ lat, lng })) || [];
+}
+
+export function isZanzibarRoadRoute(locations, from, to) {
+  if (!isZanzibarLocation(from) || !isZanzibarLocation(to) || locations.length < 2) return false;
+  if (!locations.every(isZanzibarLocation)) return false;
+  const routeDistance = locations.reduce((total, location, index) => {
+    if (index === 0) return total;
+    return total + distanceKm(locations[index - 1], location);
+  }, 0);
+  const directDistance = distanceKm(from, to);
+  return routeDistance <= Math.max(2.5, directDistance * 4 + 2);
 }

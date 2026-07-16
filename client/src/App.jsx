@@ -6,7 +6,6 @@ import {
   Bike,
   CheckCircle2,
   Clock3,
-  Folder,
   Flame,
   Gift,
   Languages,
@@ -51,9 +50,9 @@ import {
   etaText,
   fullTanzaniaPhone,
   gasLabel,
-  getLocalPlaceSuggestions,
   getPaymentMethod,
   getStoreScore,
+  isZanzibarRoadRoute,
   localTanzaniaPhone,
   loyaltyPointsFor,
   money,
@@ -138,7 +137,7 @@ export default function App() {
   const discount = promoDiscount(subtotal, form.promoCode);
   const total = Math.max(0, subtotal - discount);
   const activePromo = promoCodes[form.promoCode.trim().toUpperCase()];
-  const addressSuggestions = mapAddressSuggestions.length > 0 ? mapAddressSuggestions : getLocalPlaceSuggestions(form.address);
+  const addressSuggestions = mapAddressSuggestions;
   const formDestination = useMemo(() => {
     const fallback = form.deliveryLocation;
     if (!fallback) return null;
@@ -252,6 +251,7 @@ export default function App() {
       text: `${t.hero} - ${t.chooseGas}`,
       url: window.location.href
     };
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(`${shareData.text} ${shareData.url}`)}`;
 
     try {
       if (navigator.share) {
@@ -260,22 +260,32 @@ export default function App() {
         return;
       }
 
-      if (navigator.clipboard) {
+      if (navigator.clipboard && window.isSecureContext) {
         await navigator.clipboard.writeText(`${shareData.text} ${shareData.url}`);
         setWelcomeNotice(t.shareCopied);
         return;
       }
 
-      setWelcomeNotice(t.shareUnavailable);
+      window.location.href = whatsappUrl;
+      setWelcomeNotice(t.messageOpened);
     } catch {
-      setWelcomeNotice(t.shareUnavailable);
+      window.location.href = whatsappUrl;
+      setWelcomeNotice(t.messageOpened);
     }
   }
 
   function messageGasFlow() {
-    const message = encodeURIComponent(`${t.hero}: ${t.chooseGas}`);
-    window.open(`https://wa.me/?text=${message}`, "_blank", "noopener,noreferrer");
+    const message = encodeURIComponent(`${t.hero}: ${t.chooseGas} ${window.location.href}`);
+    window.location.href = `https://wa.me/?text=${message}`;
     setWelcomeNotice(t.messageOpened);
+  }
+
+  function focusDeliveryAddress() {
+    setView("dispatch");
+    setOrderStep("details");
+    window.setTimeout(() => {
+      document.querySelector("[name='gasflow-dropoff-location']")?.focus();
+    }, 80);
   }
 
   function goBackFromWelcome() {
@@ -290,6 +300,17 @@ export default function App() {
   function startRiderGpsShare() {
     if (!trackingOrder || !assignedRider) {
       setRiderGpsStatus({ sharing: false, message: t.noAssignedGpsOrder });
+      return;
+    }
+
+    setOrders((current) => current.map((order) => (
+      order.id === trackingOrder.id && order.status !== "Delivered"
+        ? { ...order, status: "On the way", riderConfirmedAtMs: order.riderConfirmedAtMs || Date.now() }
+        : order
+    )));
+
+    if (!window.isSecureContext && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
+      setRiderGpsStatus({ sharing: false, message: t.locationNeedsHttps });
       return;
     }
 
@@ -318,7 +339,7 @@ export default function App() {
       }));
       setOrders((current) => current.map((order) => (
         order.id === trackingOrder.id && order.status !== "Delivered"
-          ? { ...order, status: "On the way" }
+          ? { ...order, status: "On the way", riderConfirmedAtMs: order.riderConfirmedAtMs || Date.now() }
           : order
       )));
       setRiderGpsStatus({ sharing: true, message: t.gpsSharingLive });
@@ -342,8 +363,15 @@ export default function App() {
   }
 
   function useCustomerCurrentLocation() {
+    if (!window.isSecureContext && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
+      setDispatchMessage({ type: "error", text: t.locationNeedsHttps });
+      focusDeliveryAddress();
+      return;
+    }
+
     if (!navigator.geolocation) {
       setDispatchMessage({ type: "error", text: t.browserNoLocation });
+      focusDeliveryAddress();
       return;
     }
 
@@ -366,6 +394,7 @@ export default function App() {
     }, () => {
       setIsSubmittingOrder(false);
       setDispatchMessage({ type: "error", text: t.locationPermissionDenied });
+      focusDeliveryAddress();
     }, {
       enableHighAccuracy: true,
       timeout: 12000,
@@ -610,7 +639,6 @@ export default function App() {
               <span>{t.eyebrow}</span>
             </div>
             <button type="button" onClick={messageGasFlow} aria-label={t.message}><MessageCircle size={18} /></button>
-            <button type="button" onClick={enterApp} aria-label={t.order}><Folder size={18} /></button>
           </div>
 
           <img className="welcome-image" src={heroDeliveryImage} alt="" />
@@ -1053,7 +1081,43 @@ export default function App() {
   );
 }
 
-function LeafletTrackingMap({ store, destination, riderLocation, routeLocations, etaDisplay, t }) {
+function routeProgressLocation(routeLocations, progress) {
+  if (routeLocations.length < 2) return { location: null, passedLocations: [] };
+  const clampedProgress = Math.max(0, Math.min(1, progress));
+  const segments = routeLocations.slice(1).map((location, index) => ({
+    from: routeLocations[index],
+    to: location,
+    distance: distanceKm(routeLocations[index], location)
+  }));
+  const totalDistance = segments.reduce((total, segment) => total + segment.distance, 0);
+  if (!totalDistance) return { location: routeLocations[0], passedLocations: [routeLocations[0]] };
+
+  let travelled = totalDistance * clampedProgress;
+  const passedLocations = [routeLocations[0]];
+
+  for (const segment of segments) {
+    if (travelled > segment.distance) {
+      travelled -= segment.distance;
+      passedLocations.push(segment.to);
+      continue;
+    }
+
+    const segmentProgress = segment.distance ? travelled / segment.distance : 0;
+    const location = {
+      lat: segment.from.lat + (segment.to.lat - segment.from.lat) * segmentProgress,
+      lng: segment.from.lng + (segment.to.lng - segment.from.lng) * segmentProgress
+    };
+    passedLocations.push(location);
+    return { location, passedLocations };
+  }
+
+  return {
+    location: routeLocations[routeLocations.length - 1],
+    passedLocations: routeLocations
+  };
+}
+
+function LeafletTrackingMap({ store, destination, riderLocation, routeLocations, passedRouteLocations = [], etaDisplay, t }) {
   const mapElementRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const layersRef = useRef([]);
@@ -1067,13 +1131,13 @@ function LeafletTrackingMap({ store, destination, riderLocation, routeLocations,
         if (cancelled || !mapElementRef.current || mapInstanceRef.current) return;
         const center = [(store.lat + destination.lat) / 2, (store.lng + destination.lng) / 2];
         mapInstanceRef.current = L.map(mapElementRef.current, {
-          attributionControl: true,
+          attributionControl: false,
           zoomControl: false
         }).setView(center, 13);
 
         L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
           maxZoom: 19,
-          attribution: "&copy; OpenStreetMap"
+          attribution: ""
         }).addTo(mapInstanceRef.current);
         setIsReady(true);
       })
@@ -1122,6 +1186,19 @@ function LeafletTrackingMap({ store, destination, riderLocation, routeLocations,
       );
     }
 
+    const passedLatLngs = passedRouteLocations.map((location) => [location.lat, location.lng]);
+    if (passedLatLngs.length > 1) {
+      layersRef.current.push(
+        L.polyline(passedLatLngs, {
+          color: "#2563eb",
+          opacity: 1,
+          weight: 6,
+          lineCap: "round",
+          lineJoin: "round"
+        }).addTo(map)
+      );
+    }
+
     layersRef.current.push(
       L.circleMarker([store.lat, store.lng], {
         color: "#ffffff",
@@ -1145,9 +1222,9 @@ function LeafletTrackingMap({ store, destination, riderLocation, routeLocations,
       layersRef.current.push(
         L.circleMarker([riderLocation.lat, riderLocation.lng], {
           color: "#ffffff",
-          fillColor: "#1f2937",
+          fillColor: "#2563eb",
           fillOpacity: 1,
-          radius: 8,
+          radius: 9,
           weight: 4
         }).addTo(map)
       );
@@ -1157,15 +1234,15 @@ function LeafletTrackingMap({ store, destination, riderLocation, routeLocations,
     layersRef.current.push(
       L.marker([store.lat, store.lng], {
         icon: L.divIcon({
-          className: "leaflet-stop-label pickup-label",
-          html: `<span>${t.pickup}</span><strong>${store.zone}</strong>`
+          className: "leaflet-stop-label leaflet-pickup-label",
+          html: `<span>${t.pickup}</span><strong>1 min</strong>`
         })
       }).addTo(map)
     );
     layersRef.current.push(
       L.marker([destination.lat, destination.lng], {
         icon: L.divIcon({
-          className: "leaflet-stop-label dropoff-label",
+          className: "leaflet-stop-label leaflet-dropoff-label",
           html: `<span>${t.dropoff}</span><strong>${etaDisplay}</strong>`
         })
       }).addTo(map)
@@ -1178,7 +1255,7 @@ function LeafletTrackingMap({ store, destination, riderLocation, routeLocations,
       maxZoom: 15
     });
     window.setTimeout(() => map.invalidateSize(), 0);
-  }, [destination.lat, destination.lng, etaDisplay, isReady, riderLocation, routeLocations, store.lat, store.lng, store.zone, t.dropoff, t.pickup]);
+  }, [destination.lat, destination.lng, etaDisplay, isReady, passedRouteLocations, riderLocation, routeLocations, store.lat, store.lng, store.zone, t.dropoff, t.pickup]);
 
   return (
     <>
@@ -1212,13 +1289,24 @@ function LiveMap({ order, riderLocation, nowMs, language, t, onConfirmDelivered,
   const displayedRouteDistanceKm = routeState.distanceKm || savedRoadDistanceKm;
   const etaSourceLabel = hasLiveGps ? t.riderGpsActive : t.waitingForRiderGpsLower;
   const etaLabel = etaDisplay;
-  const statusTitle = order.status === "Delivered" ? t.gasDelivered : hasLiveGps ? t.yourGasOnWay : t.waitingForRiderGps;
+  const isRiderOnWay = order.status === "On the way";
+  const statusTitle = order.status === "Delivered" ? t.gasDelivered : (hasLiveGps || isRiderOnWay) ? t.yourGasOnWay : t.waitingForRiderGps;
   const trackingNote = order.status === "Delivered"
     ? t.deliveryCompleted
-    : hasLiveGps
+    : hasLiveGps || isRiderOnWay
       ? t.riderLocationUpdating
       : t.gpsPendingRouteNote;
   const riderInitials = rider.name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("");
+  const shouldShowRouteProgress = hasRoadRoute && (hasLiveGps || order.status === "On the way" || order.status === "Delivered");
+  const routeProgress = order.status === "Delivered"
+    ? 1
+    : order.status === "On the way" && order.initialEtaMinutes
+      ? Math.min(0.95, Math.max(0.08, (nowMs - (order.riderConfirmedAtMs || order.createdAtMs || nowMs)) / (order.initialEtaMinutes * 60 * 1000)))
+      : 0;
+  const routeProgressView = shouldShowRouteProgress
+    ? routeProgressLocation(routeState.locations, hasLiveGps ? routeProgress || 0.1 : routeProgress)
+    : { location: null, passedLocations: [] };
+  const displayedRiderLocation = hasLiveGps ? riderLocation : routeProgressView.location;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -1230,11 +1318,14 @@ function LiveMap({ order, riderLocation, nowMs, language, t, onConfirmDelivered,
         return response.json();
       })
       .then((data) => {
-        const route = [...(data.routes || [])].sort((a, b) => (a.distance || Infinity) - (b.distance || Infinity))[0];
-        const locations = routeCoordinatesToLocations(route);
+        const route = [...(data.routes || [])]
+          .map((item) => ({ route: item, locations: routeCoordinatesToLocations(item) }))
+          .filter((item) => isZanzibarRoadRoute(item.locations, routeStart, destination))
+          .sort((a, b) => (a.route.distance || Infinity) - (b.route.distance || Infinity))[0];
+        const locations = route?.locations || [];
         setRouteState({
           locations: locations.length > 1 ? locations : [routeStart, destination],
-          distanceKm: route?.distance ? route.distance / 1000 : null,
+          distanceKm: route?.route?.distance ? route.route.distance / 1000 : null,
           status: locations.length > 1 ? "ready" : "fallback"
         });
       })
@@ -1272,8 +1363,9 @@ function LiveMap({ order, riderLocation, nowMs, language, t, onConfirmDelivered,
         <LeafletTrackingMap
           store={store}
           destination={destination}
-          riderLocation={hasLiveGps ? riderLocation : null}
+          riderLocation={displayedRiderLocation}
           routeLocations={hasRoadRoute ? routeState.locations : []}
+          passedRouteLocations={routeProgressView.passedLocations}
           etaDisplay={etaDisplay}
           t={t}
         />

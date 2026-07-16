@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --configLoader native --host 127.0.0.1 --port 5000",
+    "dev": "vite --configLoader native --host 0.0.0.0 --port 5000",
     "build": "vite build --configLoader native",
-    "preview": "vite preview --configLoader native --host 127.0.0.1 --port 5000",
+    "preview": "vite preview --configLoader native --host 0.0.0.0 --port 5000",
     "test": "node --test client/src/**/*.test.js",
     "server": "python server/app.py"
   },
