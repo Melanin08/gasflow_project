@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
+  ArrowLeft,
   Bell,
   Bike,
   CheckCircle2,
   Clock3,
+  Folder,
   Flame,
   Gift,
   Languages,
@@ -17,6 +19,7 @@ import {
   Receipt,
   Route,
   Send,
+  Share2,
   Star,
   Store,
   Truck,
@@ -26,6 +29,7 @@ import DispatchPage from "./pages/DispatchPage.jsx";
 import RiderGpsPage from "./pages/RiderGpsPage.jsx";
 import TrackingPage from "./pages/TrackingPage.jsx";
 import { PaymentQrCard, RoutePreviewMap, TanzaniaPhoneInput } from "./components/FormControls.jsx";
+import heroDeliveryImage from "../assets/fast-gas-delivery-hero.jpg";
 import {
   cylinderTypes,
   deliveryStages,
@@ -57,18 +61,23 @@ import {
   orderDestination,
   paymentDisplay,
   pickRider,
+  placeToLocation,
   promoDiscount,
   providerConfirmationReference,
   recommendStore,
   remainingEtaSeconds,
   resolveDeliveryLocation,
+  roadDistanceKm,
   routeApiUrl,
   routeCoordinatesToLocations,
+  searchTanzaniaPlaces,
 } from "./utils/gasflowLogic.js";
 import "./styles.css";
 
 export default function App() {
+  const [hasEnteredApp, setHasEnteredApp] = useState(false);
   const [view, setView] = useState("dispatch");
+  const [orderStep, setOrderStep] = useState("details");
   const [orders, setOrders] = useState(initialOrders);
   const [riderLocations, setRiderLocations] = useState({});
   const [riderGpsStatus, setRiderGpsStatus] = useState({ sharing: false, message: "" });
@@ -80,6 +89,7 @@ export default function App() {
   const [language, setLanguage] = useState("en");
   const [notificationStatus, setNotificationStatus] = useState("off");
   const [loyaltyPoints, setLoyaltyPoints] = useState(0);
+  const [welcomeNotice, setWelcomeNotice] = useState("");
   const [mapAddressSuggestions, setMapAddressSuggestions] = useState([]);
   const [addressSearchStatus, setAddressSearchStatus] = useState("idle");
 
@@ -198,6 +208,52 @@ export default function App() {
     }
   }
 
+  function enterApp() {
+    setHasEnteredApp(true);
+    setWelcomeNotice("");
+  }
+
+  async function shareWelcomePage() {
+    const shareData = {
+      title: "GasFlow",
+      text: `${t.hero} - ${t.chooseGas}`,
+      url: window.location.href
+    };
+
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+        setWelcomeNotice(t.shareReady);
+        return;
+      }
+
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(`${shareData.text} ${shareData.url}`);
+        setWelcomeNotice(t.shareCopied);
+        return;
+      }
+
+      setWelcomeNotice(t.shareUnavailable);
+    } catch {
+      setWelcomeNotice(t.shareUnavailable);
+    }
+  }
+
+  function messageGasFlow() {
+    const message = encodeURIComponent(`${t.hero}: ${t.chooseGas}`);
+    window.open(`https://wa.me/?text=${message}`, "_blank", "noopener,noreferrer");
+    setWelcomeNotice(t.messageOpened);
+  }
+
+  function goBackFromWelcome() {
+    if (window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+
+    setWelcomeNotice(t.noPreviousPage);
+  }
+
   function startRiderGpsShare() {
     if (!trackingOrder || !assignedRider) {
       setRiderGpsStatus({ sharing: false, message: t.noAssignedGpsOrder });
@@ -293,6 +349,36 @@ export default function App() {
     setMapAddressSuggestions([]);
     setAddressSearchStatus("idle");
     setDispatchMessage({ type: "success", text: `${place.name} ${t.validTanzaniaLocation}` });
+  }
+
+  function goToPaymentStep() {
+    if (!form.customer.trim()) {
+      setDispatchMessage({ type: "error", text: t.enterCustomerName });
+      return;
+    }
+
+    if (localTanzaniaPhone(form.phone).length !== 9) {
+      setDispatchMessage({ type: "error", text: t.enterCustomerPhone });
+      return;
+    }
+
+    if (!form.address.trim()) {
+      setDispatchMessage({ type: "error", text: t.enterDeliveryAddress });
+      return;
+    }
+
+    if (!form.zone) {
+      setDispatchMessage({ type: "error", text: t.fixedZoneRequired });
+      return;
+    }
+
+    if (!form.cylinder) {
+      setDispatchMessage({ type: "error", text: t.chooseGasBeforeOrder });
+      return;
+    }
+
+    setDispatchMessage({ type: "", text: "" });
+    setOrderStep("payment");
   }
 
   async function placeOrder() {
@@ -401,6 +487,7 @@ export default function App() {
     setOrders((current) => [order, ...current]);
     setLoyaltyPoints((current) => current + earnedPoints);
     setForm(emptyOrderForm);
+    setOrderStep("details");
     setDispatchMessage({
       type: "success",
       text: isCashOrder
@@ -450,24 +537,80 @@ export default function App() {
       }
     });
     setView("dispatch");
+    setOrderStep("details");
     setDispatchMessage({ type: "info", text: t.previousOrderLoaded });
   }
 
-  return (
-    <main className="app-shell">
-      <header className="topbar">
-        <div className="brand-mark"><Flame size={26} /></div>
-        <div>
-          <p className="eyebrow">{t.eyebrow}</p>
-          <h1>{t.hero}</h1>
-        </div>
-        <div className="top-actions">
+  if (!hasEnteredApp) {
+    return (
+      <main className="welcome-shell">
+        <div className="welcome-actions">
           <button className="icon-text-action" type="button" onClick={() => setLanguage((current) => current === "en" ? "sw" : "en")}>
             <Languages size={18} /> {language === "en" ? "SW" : "EN"}
           </button>
           <button className="icon-text-action" type="button" onClick={requestNotifications}>
             <Bell size={18} /> {notificationStatus === "on" ? t.notificationsOn : t.enableNotifications}
           </button>
+        </div>
+
+        <section className="welcome-phone">
+          <div className="welcome-browser-bar">
+            <button type="button" onClick={goBackFromWelcome} aria-label={t.backToDetails}><ArrowLeft size={22} /></button>
+            <div>
+              <strong>{t.hero}</strong>
+              <span>gasflow.app</span>
+            </div>
+            <button type="button" onClick={shareWelcomePage} aria-label={t.share}><Share2 size={20} /></button>
+          </div>
+
+          <div className="welcome-site-bar">
+            <strong>GasFlow</strong>
+            <button className="use-app-button" type="button" onClick={enterApp}>
+              {t.useApp}
+            </button>
+          </div>
+
+          <div className="welcome-author-row">
+            <span className="welcome-mini-logo"><Flame size={16} /></span>
+            <div>
+              <strong>{t.hero}</strong>
+              <span>{t.eyebrow}</span>
+            </div>
+            <button type="button" onClick={messageGasFlow} aria-label={t.message}><MessageCircle size={18} /></button>
+            <button type="button" onClick={enterApp} aria-label={t.order}><Folder size={18} /></button>
+          </div>
+
+          <img className="welcome-image" src={heroDeliveryImage} alt="" />
+
+          <div className="welcome-article-copy">
+            <h1>{t.welcomeArticleTitle}</h1>
+            <p>
+              {t.welcomeArticleBefore} <strong>{t.hero}</strong> {t.welcomeArticleAfter}
+            </p>
+          </div>
+
+          {welcomeNotice && <p className="welcome-notice">{welcomeNotice}</p>}
+
+          <button className="welcome-floating-proceed" type="button" onClick={enterApp} aria-label={t.proceed}>
+            <CheckCircle2 size={22} />
+          </button>
+        </section>
+      </main>
+    );
+  }
+
+  return (
+    <main className="app-shell">
+      <header className="topbar">
+        <button className="round-action app-back-action" type="button" onClick={() => setHasEnteredApp(false)} aria-label="Back">
+          <ArrowLeft size={18} />
+        </button>
+        <div className="brand-mark"><Flame size={26} /></div>
+        <div className="hero-copy">
+          <p className="eyebrow">{t.eyebrow}</p>
+          <h1>{t.hero}</h1>
+        </div>
+        <div className="top-actions">
           <div className="customer-app-card">
             <Gift size={20} />
             <span>{t.loyalty}</span>
@@ -482,7 +625,14 @@ export default function App() {
           ["tracking", t.trackOrder],
           ["rider", t.riderGps]
         ].map(([id, label]) => (
-          <button key={id} className={view === id ? "active" : ""} onClick={() => setView(id)}>
+          <button
+            key={id}
+            className={view === id ? "active" : ""}
+            onClick={() => {
+              setView(id);
+              if (id === "dispatch") setOrderStep("details");
+            }}
+          >
             {label}
           </button>
         ))}
@@ -493,8 +643,8 @@ export default function App() {
           <div className="panel">
             <div className="section-heading">
               <div>
-                <p className="eyebrow">{t.orderGas}</p>
-                <h2>{t.chooseGas}</h2>
+                <p className="eyebrow">{orderStep === "details" ? t.orderDetails : t.paymentConfirmation}</p>
+                <h2>{orderStep === "details" ? t.chooseGas : t.choosePayment}</h2>
               </div>
               <span className="status-pill">
                 <Clock3 size={16} />
@@ -502,6 +652,13 @@ export default function App() {
               </span>
             </div>
 
+            <div className="checkout-steps" aria-label="Order steps">
+              <span className="active">{t.orderDetails}</span>
+              <span className={orderStep === "payment" ? "active" : ""}>{t.paymentConfirmation}</span>
+            </div>
+
+            {orderStep === "details" && (
+            <>
             <div className="order-form">
               <label>
                 {t.customerName}
@@ -548,9 +705,6 @@ export default function App() {
                     ))}
                   </div>
                 )}
-                {addressSearchStatus === "searching" && !form.deliveryLocation && (
-                  <small className="map-search-note">{t.searchingTanzaniaMap}</small>
-                )}
                 {addressSearchStatus === "empty" && !form.deliveryLocation && (
                   <small className="map-search-note">{t.noTanzaniaMapMatch}</small>
                 )}
@@ -583,6 +737,21 @@ export default function App() {
               </div>
             </div>
 
+            <div className="checkout-row">
+              <div>
+                <span>{t.total}</span>
+                <strong>{money(total)}</strong>
+                {discount > 0 && <small>{t.saved} {money(discount)}</small>}
+              </div>
+              <button className="primary-action" type="button" onClick={goToPaymentStep}>
+                <Send size={18} /> {t.continueToPayment}
+              </button>
+            </div>
+            </>
+            )}
+
+            {orderStep === "payment" && (
+            <>
             <div className="payment-panel">
               <div className="payment-heading">
                 <div>
@@ -696,10 +865,15 @@ export default function App() {
                 <strong>{money(total)}</strong>
                 {discount > 0 && <small>{t.saved} {money(discount)}</small>}
               </div>
+              <button className="ghost-action" type="button" onClick={() => setOrderStep("details")}>
+                {t.backToDetails}
+              </button>
               <button className="primary-action" onClick={placeOrder} disabled={isSubmittingOrder}>
                 <Send size={18} /> {isSubmittingOrder ? t.findingMap : t.placeOrder}
               </button>
             </div>
+            </>
+            )}
             {dispatchMessage.text && (
               <div className={`dispatch-feedback ${dispatchMessage.type}`}>
                 {dispatchMessage.type === "success" ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
@@ -730,7 +904,7 @@ export default function App() {
                 <RoutePreviewMap store={bestStore} destination={formDestination} quantity={form.quantity} />
                 <div className="eta-number">
                   <strong>{etaRangeText(bestStore, formDestination, form.quantity)}</strong>
-                  <span>{t.liveTrackingStarts}</span>
+                  <span>{distanceText(deliveryEtaEstimate(bestStore, formDestination, form.quantity).roadKm)} {t.distanceBasedEta}</span>
                 </div>
                 <div className="assignment-card">
                   <Bike size={20} />
@@ -857,6 +1031,7 @@ function LiveMap({ order, riderLocation, nowMs, language, t, onConfirmDelivered,
   const [routeState, setRouteState] = useState({ locations: [], distanceKm: null, status: "loading" });
   const routeStart = hasLiveGps ? riderLocation : store;
   const mapView = createTrackingMapView(store, destination, hasLiveGps ? riderLocation : null, routeState.locations);
+  const hasRoadRoute = routeState.status === "ready" && routeState.locations.length > 2;
   const savedRoadDistanceKm = order.roadDistanceKm || roadDistanceKm(store, destination);
   const etaRangeDisplay = order.initialEtaMinMinutes && order.initialEtaMinutes
     ? `${order.initialEtaMinMinutes}-${order.initialEtaMinutes} min`
@@ -943,9 +1118,9 @@ function LiveMap({ order, riderLocation, nowMs, language, t, onConfirmDelivered,
           <strong>{destination.label}</strong>
         </div>
         <svg className="route-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-          <path className="route-shadow" d={mapView.remainingPath} />
-          <path className="route-remaining" d={mapView.remainingPath} />
-          {hasLiveGps && <path className="route-completed" d={mapView.completedPath} />}
+          {hasRoadRoute && <path className="route-shadow" d={mapView.remainingPath} />}
+          {hasRoadRoute && <path className="route-remaining" d={mapView.remainingPath} />}
+          {hasRoadRoute && hasLiveGps && <path className="route-completed" d={mapView.completedPath} />}
         </svg>
         <span className="map-pin store-pin" style={mapView.storePoint}><Store size={15} /></span>
         <span className="map-pin customer-pin" style={mapView.destinationPoint}><MapPin size={15} /></span>
@@ -958,11 +1133,9 @@ function LiveMap({ order, riderLocation, nowMs, language, t, onConfirmDelivered,
           <span>{t.dropoff}</span>
           <strong>{etaDisplay}</strong>
         </div>
-        <div className="map-watermark">{hasLiveGps ? t.liveRiderGps : t.routeMapGpsPending}</div>
-        <div className="map-eta-card">
-          <span>{order.status === "Delivered" ? t.arrived : hasLiveGps ? t.estimatedArrival : t.estimatedWindow}</span>
-          <strong>{etaDisplay}</strong>
-          {order.status !== "Delivered" && <small>{routeState.status === "ready" ? `${etaSourceLabel} - ${t.route}` : etaSourceLabel}</small>}
+        <div className="bolt-map-controls" aria-hidden="true">
+          <button type="button"><MessageCircle size={18} /></button>
+          <button type="button"><Route size={18} /></button>
         </div>
 
         <div className="tracking-bottom-sheet">
@@ -1000,21 +1173,11 @@ function LiveMap({ order, riderLocation, nowMs, language, t, onConfirmDelivered,
             <a className="round-action" href={`sms:${rider.phone}`} aria-label={t.rider}><MessageCircle size={17} /></a>
           </div>
 
-          <div className="customer-summary-list compact">
-            <div><span>{t.order}</span><strong>{order.id}</strong></div>
-            <div><span>{t.receiptGas}</span><strong>{order.quantity} x {cylinder ? gasLabel(cylinder, language) : ""}</strong></div>
-            <div><span>{t.dropoff}</span><strong>{t.selectedDropoff}</strong></div>
-            <div><span>{t.payment}</span><strong>{paymentText.name} - {order.paymentStatus}</strong></div>
-            <div><span>{t.confirmedBy}</span><strong>{order.paymentConfirmedBy || paymentText.providerLabel}</strong></div>
-            <div><span>{t.from}</span><strong>{store.name}</strong></div>
-            <div><span>{t.total}</span><strong>{money(order.total || 0)}</strong></div>
-          </div>
-
           <div className="receipt-panel">
             <div>
-              <p className="eyebrow">{t.receipt}</p>
+              <p className="eyebrow">{order.id}</p>
               <strong>{order.id}</strong>
-              <span>{money(order.total || 0)} {t.paidBy} {paymentText.name}</span>
+              <span>{order.quantity} x {cylinder ? gasLabel(cylinder, language) : ""} - {money(order.total || 0)}</span>
             </div>
             <a className="ghost-action" href={receiptHref} download={`${order.id}-receipt.txt`}>
               <Receipt size={17} /> {t.receipt}
