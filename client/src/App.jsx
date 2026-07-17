@@ -28,7 +28,6 @@ import DispatchPage from "./pages/DispatchPage.jsx";
 import RiderGpsPage from "./pages/RiderGpsPage.jsx";
 import TrackingPage from "./pages/TrackingPage.jsx";
 import { PaymentQrCard, RoutePreviewMap, TanzaniaPhoneInput } from "./components/FormControls.jsx";
-import heroDeliveryImage from "../assets/fast-gas-delivery-hero.jpg";
 import {
   cylinderTypes,
   deliveryStages,
@@ -641,7 +640,7 @@ export default function App() {
             <button type="button" onClick={messageGasFlow} aria-label={t.message}><MessageCircle size={18} /></button>
           </div>
 
-          <img className="welcome-image" src={heroDeliveryImage} alt="" />
+          <img className="welcome-image" src="https://chatgpt.com/backend-api/estuary/public_content/enc/eyJpZCI6Im1fNmE1OTcxMjVjMjljODE5MTkwZGE1NzA5ZGMxMzc3Yzk6c2VkaW1lbnQ6Ly8xMWNkZmRlYzAyODQ3YjAjZmlsZV8wMDAwMDAwMGNmYzA3MjQzOGE1NGIyMjNhNjM1MGY1NyN1bmZ1cmwiLCJnaXptb19pZCI6bnVsbCwidHMiOiIyMDY1MSIsInAiOiJweWkiLCJjaWQiOiIxIiwic2lnIjoiYmIzNDRmMzNhM2NjMmZiMTM5MjdjZmViMDY0NGQxODM3MjRlYzM4YzM5NjQwMWNhODQ2MWU0MzA5YWI4MjkyYyIsInYiOiIwIiwiY3MiOm51bGwsImNkbiI6bnVsbCwiZm4iOm51bGwsImNkIjpudWxsLCJjcCI6bnVsbCwibWEiOm51bGx9" alt="" />
 
           <div className="welcome-article-copy">
             <h1>{t.welcomeArticleTitle}</h1>
