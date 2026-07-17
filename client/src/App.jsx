@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
+  ArrowRight,
   Bell,
   Bike,
   CheckCircle2,
@@ -9,9 +10,12 @@ import {
   Flame,
   Gift,
   Languages,
+  Lock,
+  LogOut,
   MapPin,
   MessageCircle,
   Minus,
+  PackageCheck,
   Phone,
   Plus,
   QrCode,
@@ -21,8 +25,11 @@ import {
   Share2,
   Star,
   Store,
+  TrendingUp,
   Truck,
+  Users,
   WalletCards,
+  X,
 } from "lucide-react";
 import DispatchPage from "./pages/DispatchPage.jsx";
 import RiderGpsPage from "./pages/RiderGpsPage.jsx";
@@ -75,6 +82,29 @@ const LEAFLET_CSS_URL = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
 const LEAFLET_JS_URL = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
 let leafletLoadPromise;
 
+const roleCredentials = {
+  rider: {
+    label: "Rider",
+    usernameLabel: "Rider email",
+    passwordLabel: "PIN",
+    username: "rider@iitmz.ac.in"
+  },
+  admin: {
+    label: "Admin",
+    usernameLabel: "Admin email",
+    passwordLabel: "Password",
+    username: "admin@iitmz.ac.in"
+  }
+};
+
+const STAFF_EMAIL_DOMAIN = "@iitmz.ac.in";
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:5001";
+
+function portalFromHash() {
+  const portal = window.location.hash.replace("#", "").toLowerCase();
+  return portal === "admin" || portal === "rider" ? portal : "customer";
+}
+
 function loadLeaflet() {
   if (window.L) return Promise.resolve(window.L);
   if (leafletLoadPromise) return leafletLoadPromise;
@@ -106,6 +136,14 @@ function loadLeaflet() {
 }
 
 export default function App() {
+  const [portal, setPortal] = useState(portalFromHash);
+  const [sessions, setSessions] = useState(() => {
+    try {
+      return JSON.parse(window.localStorage.getItem("gasflowSessions")) || {};
+    } catch {
+      return {};
+    }
+  });
   const [hasEnteredApp, setHasEnteredApp] = useState(false);
   const [view, setView] = useState("dispatch");
   const [orderStep, setOrderStep] = useState("details");
@@ -165,10 +203,38 @@ export default function App() {
   const trackingOrder = orders[0];
   const assignedRider = trackingOrder ? riders.find((item) => item.id === trackingOrder.riderId) : null;
   const activeRiderLocation = trackingOrder ? riderLocations[trackingOrder.riderId] : null;
+  const portalTitle = portal === "admin" ? "GasFlow Admin" : portal === "rider" ? "GasFlow Rider" : t.hero;
+  const portalEyebrow = portal === "admin" ? "Operations dashboard" : portal === "rider" ? t.riderLocationSender : t.eyebrow;
+  const visibleViews = portal === "admin"
+    ? [["admin", "Admin"]]
+    : portal === "rider"
+      ? [["rider", t.riderGps]]
+      : [["dispatch", t.placeOrder], ["tracking", t.trackOrder]];
+  const activeSession = sessions[portal]?.expiresAtMs > Date.now() ? sessions[portal] : null;
 
   useEffect(() => {
     const timerId = window.setInterval(() => setNowMs(Date.now()), 1000);
     return () => window.clearInterval(timerId);
+  }, []);
+
+  useEffect(() => {
+    function syncPortal() {
+      const nextPortal = portalFromHash();
+      setPortal(nextPortal);
+      if (nextPortal === "admin") {
+        setHasEnteredApp(true);
+        setView("admin");
+      } else if (nextPortal === "rider") {
+        setHasEnteredApp(true);
+        setView("rider");
+      } else {
+        setView((current) => current === "tracking" ? "tracking" : "dispatch");
+      }
+    }
+
+    syncPortal();
+    window.addEventListener("hashchange", syncPortal);
+    return () => window.removeEventListener("hashchange", syncPortal);
   }, []);
 
   useEffect(() => {
@@ -242,6 +308,35 @@ export default function App() {
   function enterApp() {
     setHasEnteredApp(true);
     setWelcomeNotice("");
+  }
+
+  function returnToCustomerApp() {
+    if (portal !== "customer") {
+      window.location.hash = "";
+      setPortal("customer");
+      setView("dispatch");
+      setHasEnteredApp(false);
+      return;
+    }
+
+    setHasEnteredApp(false);
+  }
+
+  function loginPortal(role, session) {
+    setSessions((current) => {
+      const next = { ...current, [role]: session };
+      window.localStorage.setItem("gasflowSessions", JSON.stringify(next));
+      return next;
+    });
+  }
+
+  function logoutPortal() {
+    setSessions((current) => {
+      const next = { ...current };
+      delete next[portal];
+      window.localStorage.setItem("gasflowSessions", JSON.stringify(next));
+      return next;
+    });
   }
 
   async function shareWelcomePage() {
@@ -574,6 +669,25 @@ export default function App() {
     notifyCustomer(t.gasDelivered, t.gasDeliveredBody);
   }
 
+  function updateOrderStatus(orderId, status) {
+    setOrders((current) =>
+      current.map((order) => {
+        if (order.id !== orderId) return order;
+        return {
+          ...order,
+          status,
+          ...(status === "Delivered"
+            ? {
+                paymentStatus: order.payment === "cash" ? t.paid : order.paymentStatus,
+                deliveredAt: order.deliveredAt || new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" }).format(new Date())
+              }
+            : {}),
+          ...(status === "On the way" ? { riderConfirmedAtMs: order.riderConfirmedAtMs || Date.now() } : {})
+        };
+      })
+    );
+  }
+
   function rateOrder(orderId, rating) {
     setOrders((current) =>
       current.map((order) => order.id === orderId ? { ...order, rating } : order)
@@ -602,7 +716,7 @@ export default function App() {
     setDispatchMessage({ type: "info", text: t.previousOrderLoaded });
   }
 
-  if (!hasEnteredApp) {
+  if (portal === "customer" && !hasEnteredApp) {
     return (
       <main className="welcome-shell">
         <div className="welcome-actions">
@@ -662,43 +776,52 @@ export default function App() {
   return (
     <main className={`app-shell${view === "tracking" ? " tracking-shell" : ""}`}>
       <header className="topbar">
-        <button className="round-action app-back-action" type="button" onClick={() => setHasEnteredApp(false)} aria-label="Back">
+        <button className="round-action app-back-action" type="button" onClick={returnToCustomerApp} aria-label="Back">
           <ArrowLeft size={18} />
         </button>
         <div className="brand-mark"><Flame size={26} /></div>
         <div className="hero-copy">
-          <p className="eyebrow">{t.eyebrow}</p>
-          <h1>{t.hero}</h1>
+          <p className="eyebrow">{portalEyebrow}</p>
+          <h1>{portalTitle}</h1>
         </div>
-        <div className="top-actions">
+        {portal === "customer" && <div className="top-actions">
           <div className="customer-app-card">
             <Gift size={20} />
             <span>{t.loyalty}</span>
             <strong>{loyaltyPoints}</strong>
           </div>
-        </div>
+        </div>}
+        {portal !== "customer" && activeSession && (
+          <div className="top-actions">
+            <button className="icon-text-action" type="button" onClick={logoutPortal}>
+              <LogOut size={17} /> Logout
+            </button>
+          </div>
+        )}
       </header>
 
-      <nav className="view-tabs" aria-label="Main views">
-        {[
-          ["dispatch", t.placeOrder],
-          ["tracking", t.trackOrder],
-          ["rider", t.riderGps]
-        ].map(([id, label]) => (
-          <button
-            key={id}
-            className={view === id ? "active" : ""}
-            onClick={() => {
-              setView(id);
-              if (id === "dispatch") setOrderStep("details");
-            }}
-          >
-            {label}
-          </button>
-        ))}
-      </nav>
+      {portal !== "customer" && !activeSession && (
+        <RoleLogin role={portal} onLogin={loginPortal} />
+      )}
 
-      {view === "dispatch" && (
+      {(portal === "customer" || activeSession) && visibleViews.length > 1 && (
+        <nav className="view-tabs" aria-label="Main views">
+          {visibleViews.map(([id, label]) => (
+            <button
+              key={id}
+              className={view === id ? "active" : ""}
+              onClick={() => {
+                setView(id);
+                if (id === "dispatch") setOrderStep("details");
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+      )}
+
+      {portal === "customer" && view === "dispatch" && (
         <DispatchPage>
           <div className="panel">
             <div className="section-heading">
@@ -987,7 +1110,7 @@ export default function App() {
         </DispatchPage>
       )}
 
-      {view === "tracking" && (
+      {portal === "customer" && view === "tracking" && (
         <TrackingPage>
           <div className="tracking-experience">
             {trackingOrder && (
@@ -1007,55 +1130,77 @@ export default function App() {
         </TrackingPage>
       )}
 
-      {view === "rider" && (
+      {portal === "rider" && activeSession && view === "rider" && (
         <RiderGpsPage>
-          <div className="panel rider-gps-panel">
-            <div className="section-heading">
-              <div>
-                <p className="eyebrow">{t.riderLocationSender}</p>
-                <h2>{trackingOrder ? `${assignedRider?.name || t.assignedRider} - ${trackingOrder.id}` : t.noActiveOrder}</h2>
-              </div>
-              <span className={riderGpsStatus.sharing ? "status-pill gps-live" : "status-pill"}>
-                <MapPin size={16} />
-                {riderGpsStatus.sharing ? t.gpsLive : t.gpsOff}
-              </span>
-            </div>
-
-            {!trackingOrder && (
+          {!trackingOrder && (
+            <div className="panel rider-empty-panel">
               <div className="empty-state">
                 <Truck size={28} /> {t.placeOrderFirstGps}
               </div>
-            )}
+            </div>
+          )}
 
-            {trackingOrder && (
-              <>
-                <div className="rider-gps-grid">
+          {trackingOrder && (
+            <div className="rider-app-layout">
+              <section className="panel rider-job-card">
+                <div className="rider-job-top">
                   <div>
-                    <span>{t.rider}</span>
-                    <strong>{assignedRider?.name || trackingOrder.riderId}</strong>
+                    <p className="eyebrow">Active delivery</p>
+                    <h2>{trackingOrder.id}</h2>
+                    <span>{trackingOrder.status}</span>
                   </div>
+                  <strong>{etaRangeText(stores.find((item) => item.id === trackingOrder.storeId) || stores[0], orderDestination(trackingOrder), trackingOrder.quantity || 1)}</strong>
+                </div>
+                <div className="rider-job-route">
                   <div>
-                    <span>{t.vehicle}</span>
-                    <strong>{assignedRider?.vehicle || t.vehicle}</strong>
+                    <Store size={18} />
+                    <span>{stores.find((item) => item.id === trackingOrder.storeId)?.name || t.depot}</span>
                   </div>
+                  <Route size={18} />
                   <div>
-                    <span>{t.order}</span>
-                    <strong>{trackingOrder.id}</strong>
-                  </div>
-                  <div>
-                    <span>{t.lastGps}</span>
-                    <strong>{activeRiderLocation ? `${activeRiderLocation.lat.toFixed(5)}, ${activeRiderLocation.lng.toFixed(5)}` : t.notSentYet}</strong>
-                  </div>
-                  <div>
-                    <span>{t.accuracy}</span>
-                    <strong>{activeRiderLocation?.accuracy ? `${Math.round(activeRiderLocation.accuracy)} m` : t.waiting}</strong>
-                  </div>
-                  <div>
-                    <span>{t.updated}</span>
-                    <strong>{activeRiderLocation?.updatedAtMs ? new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date(activeRiderLocation.updatedAtMs)) : t.waiting}</strong>
+                    <MapPin size={18} />
+                    <span>{trackingOrder.address}, {trackingOrder.zone}</span>
                   </div>
                 </div>
+              </section>
 
+              <section className="panel rider-customer-card">
+                <div className="section-heading">
+                  <div>
+                    <p className="eyebrow">Customer</p>
+                    <h2>{trackingOrder.customer}</h2>
+                  </div>
+                  <span className="status-pill">{paymentDisplay(getPaymentMethod(trackingOrder.payment), t).name}</span>
+                </div>
+                <div className="rider-info-list">
+                  <div><span>Phone</span><strong>{trackingOrder.phone}</strong></div>
+                  <div><span>Gas</span><strong>{trackingOrder.quantity} x {gasLabel(cylinderTypes.find((item) => item.id === trackingOrder.cylinder), language)}</strong></div>
+                  <div><span>Payment</span><strong>{trackingOrder.paymentStatus} - {money(trackingOrder.total || 0)}</strong></div>
+                  <div><span>Notes</span><strong>{trackingOrder.notes || "No notes"}</strong></div>
+                </div>
+                <div className="rider-contact-actions">
+                  <a className="ghost-action" href={`tel:${trackingOrder.phone}`}><Phone size={17} /> Call</a>
+                  <a className="ghost-action" href={`sms:${trackingOrder.phone}`}><MessageCircle size={17} /> Message</a>
+                </div>
+              </section>
+
+              <section className="panel rider-gps-panel">
+                <div className="section-heading">
+                  <div>
+                    <p className="eyebrow">{t.riderLocationSender}</p>
+                    <h2>{assignedRider?.name || t.assignedRider}</h2>
+                  </div>
+                  <span className={riderGpsStatus.sharing ? "status-pill gps-live" : "status-pill"}>
+                    <MapPin size={16} />
+                    {riderGpsStatus.sharing ? t.gpsLive : t.gpsOff}
+                  </span>
+                </div>
+                <div className="rider-gps-grid">
+                  <div><span>{t.vehicle}</span><strong>{assignedRider?.vehicle || t.vehicle}</strong></div>
+                  <div><span>{t.lastGps}</span><strong>{activeRiderLocation ? `${activeRiderLocation.lat.toFixed(5)}, ${activeRiderLocation.lng.toFixed(5)}` : t.notSentYet}</strong></div>
+                  <div><span>{t.accuracy}</span><strong>{activeRiderLocation?.accuracy ? `${Math.round(activeRiderLocation.accuracy)} m` : t.waiting}</strong></div>
+                  <div><span>{t.updated}</span><strong>{activeRiderLocation?.updatedAtMs ? new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date(activeRiderLocation.updatedAtMs)) : t.waiting}</strong></div>
+                </div>
                 <div className="rider-gps-actions">
                   <button className="primary-action" type="button" onClick={startRiderGpsShare} disabled={riderGpsStatus.sharing}>
                     <MapPin size={17} /> {t.startGpsSharing}
@@ -1063,20 +1208,379 @@ export default function App() {
                   <button className="ghost-action" type="button" onClick={stopRiderGpsShare} disabled={!riderGpsStatus.sharing}>
                     <AlertTriangle size={17} /> {t.stopGps}
                   </button>
+                  <button className="primary-action" type="button" onClick={() => confirmDelivered(trackingOrder.id)}>
+                    <CheckCircle2 size={17} /> {t.confirmDelivered}
+                  </button>
                 </div>
-
                 {riderGpsStatus.message && (
                   <div className={`dispatch-feedback ${riderGpsStatus.sharing ? "success" : "info"}`}>
                     <MapPin size={18} />
                     <span>{riderGpsStatus.message}</span>
                   </div>
                 )}
-              </>
-            )}
-          </div>
+              </section>
+            </div>
+          )}
         </RiderGpsPage>
       )}
+
+      {portal === "admin" && activeSession && view === "admin" && (
+        <AdminDashboard
+          orders={orders}
+          riders={riders}
+          stores={stores}
+          language={language}
+          onStatusChange={updateOrderStatus}
+        />
+      )}
     </main>
+  );
+}
+
+function RoleLogin({ role, onLogin }) {
+  const config = roleCredentials[role];
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+
+  async function submitLogin(event) {
+    event.preventDefault();
+    const cleanUsername = username.trim();
+    const normalizedUsername = cleanUsername.toLowerCase();
+
+    if (!normalizedUsername.endsWith(STAFF_EMAIL_DOMAIN)) {
+      setError(`Use your ${STAFF_EMAIL_DOMAIN} email.`);
+      return;
+    }
+
+    if (!password.trim()) {
+      setError("Enter your password.");
+      return;
+    }
+
+    setIsLoading(true);
+    setError("");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          role,
+          email: normalizedUsername,
+          password
+        })
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        setError(result.error || "Login failed.");
+        return;
+      }
+
+      onLogin(role, {
+        role: result.user.role,
+        username: result.user.email,
+        token: result.token,
+        expiresAtMs: Date.now() + (result.expiresIn * 1000),
+        signedInAtMs: Date.now()
+      });
+    } catch {
+      setError("Cannot reach the backend server. Start it with npm run server.");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  return (
+    <section className="workspace auth-workspace">
+      <form className="panel auth-card" onSubmit={submitLogin}>
+        <span className="auth-lock"><Lock size={24} /></span>
+        <div>
+          <p className="eyebrow">{config.label} access</p>
+          <h2>Sign in to continue</h2>
+        </div>
+        <label>
+          {config.usernameLabel}
+          <input value={username} onChange={(event) => setUsername(event.target.value)} placeholder={config.username} />
+        </label>
+        <label>
+          {config.passwordLabel}
+          <input value={password} onChange={(event) => setPassword(event.target.value)} type="password" placeholder="Your password" />
+        </label>
+        {error && <div className="dispatch-feedback error"><AlertTriangle size={18} /><span>{error}</span></div>}
+        <button className="primary-action" type="submit" disabled={isLoading}>
+          <Lock size={17} /> {isLoading ? "Checking..." : "Login"}
+        </button>
+        <p className="auth-note">
+          Staff access is checked by the backend. Use a {STAFF_EMAIL_DOMAIN} email.
+        </p>
+      </form>
+    </section>
+  );
+}
+
+function AdminDashboard({ orders, riders, stores, language, onStatusChange }) {
+  const [section, setSection] = useState("overview");
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [zoneFilter, setZoneFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const [selectedOrderId, setSelectedOrderId] = useState("");
+  const pageSize = 8;
+  const activeOrders = orders.filter((order) => order.status !== "Delivered");
+  const deliveredOrders = orders.filter((order) => order.status === "Delivered");
+  const revenue = orders.reduce((total, order) => total + (order.total || 0), 0);
+  const pendingCash = orders.filter((order) => order.payment === "cash" && order.status !== "Delivered").reduce((total, order) => total + (order.total || 0), 0);
+  const totalStock = stores.reduce((total, store) => total + Object.values(store.stock).reduce((sum, count) => sum + count, 0), 0);
+  const riderLoad = riders.map((rider) => ({ ...rider, activeOrders: activeOrders.filter((order) => order.riderId === rider.id).length }));
+  const customerRecords = Array.from(new Map(orders.map((order) => [order.phone || order.customer || order.id, order])).values());
+  const filteredOrders = useMemo(() => {
+    const search = query.trim().toLowerCase();
+    return orders.filter((order) => {
+      const searchable = [order.id, order.customer, order.phone, order.address, order.zone, order.paymentStatus].join(" ").toLowerCase();
+      return (!search || searchable.includes(search))
+        && (statusFilter === "all" || order.status === statusFilter)
+        && (zoneFilter === "all" || order.zone === zoneFilter);
+    });
+  }, [orders, query, statusFilter, zoneFilter]);
+  const pageCount = Math.max(1, Math.ceil(filteredOrders.length / pageSize));
+  const safePage = Math.min(page, pageCount);
+  const pagedOrders = filteredOrders.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const selectedOrder = orders.find((order) => order.id === selectedOrderId) || pagedOrders[0] || orders[0] || null;
+  const statusCounts = deliveryStages.reduce((counts, stage) => ({ ...counts, [stage]: orders.filter((order) => order.status === stage).length }), {});
+  const zoneCounts = zones.map((zone) => ({
+    zone,
+    orders: orders.filter((order) => order.zone === zone).length,
+    revenue: orders.filter((order) => order.zone === zone).reduce((total, order) => total + (order.total || 0), 0)
+  })).sort((a, b) => b.orders - a.orders);
+  const sections = ["overview", "orders", "inventory", "riders", "payments", "customers", "reports"];
+
+  function resetPage() {
+    setPage(1);
+  }
+
+  return (
+    <section className="workspace admin-workspace admin-console">
+      <div className="admin-heading">
+        <div>
+          <p className="eyebrow">Operations</p>
+          <h2>Admin console</h2>
+        </div>
+        <span className="status-pill"><Clock3 size={16} /> {activeOrders.length} active</span>
+      </div>
+
+      <nav className="admin-section-tabs" aria-label="Admin sections">
+        {sections.map((item) => (
+          <button className={section === item ? "active" : ""} type="button" key={item} onClick={() => setSection(item)}>
+            {item[0].toUpperCase() + item.slice(1)}
+          </button>
+        ))}
+      </nav>
+
+      <div className="admin-command-grid">
+        <aside className="panel admin-kpi-rail">
+          <div className="admin-kpi-card featured"><PackageCheck size={20} /><span>Orders</span><strong>{orders.length}</strong><small>{deliveredOrders.length} delivered</small></div>
+          <div className="admin-kpi-card"><TrendingUp size={20} /><span>Revenue</span><strong>{money(revenue)}</strong><small>{money(pendingCash)} cash pending</small></div>
+          <div className="admin-kpi-card"><Store size={20} /><span>Stock</span><strong>{totalStock}</strong><small>{stores.length} stores online</small></div>
+          <div className="admin-kpi-card"><Users size={20} /><span>Riders</span><strong>{riders.length}</strong><small>{riderLoad.filter((rider) => rider.activeOrders > 0).length} assigned</small></div>
+        </aside>
+
+        {section === "overview" && (
+          <div className="admin-overview-grid">
+            <div className="panel admin-compact-panel">
+              <div className="section-heading"><div><p className="eyebrow">Today</p><h2>Operations snapshot</h2></div></div>
+              <div className="admin-metric-grid">
+                {deliveryStages.slice(1).map((stage) => <div className="admin-metric-cell" key={stage}><span>{stage}</span><strong>{statusCounts[stage] || 0}</strong></div>)}
+              </div>
+            </div>
+            <div className="panel admin-compact-panel">
+              <div className="section-heading"><div><p className="eyebrow">Exceptions</p><h2>Needs attention</h2></div></div>
+              <div className="admin-alert-list">
+                <div><AlertTriangle size={17} /><span>{activeOrders.filter((order) => !order.riderId).length} unassigned orders</span></div>
+                <div><WalletCards size={17} /><span>{money(pendingCash)} cash pending</span></div>
+                <div><Store size={17} /><span>{stores.filter((store) => Object.values(store.stock).reduce((sum, count) => sum + count, 0) < 25).length} low stock stores</span></div>
+              </div>
+            </div>
+            <div className="panel admin-orders-panel admin-overview-orders">
+              <div className="section-heading"><div><p className="eyebrow">Newest</p><h2>Recent orders</h2></div></div>
+              <AdminOrderTable orders={orders.slice(0, 5)} riders={riders} stores={stores} language={language} selectedOrderId={selectedOrder?.id} onSelectOrder={setSelectedOrderId} onStatusChange={onStatusChange} />
+            </div>
+          </div>
+        )}
+
+        {section === "orders" && (
+          <div className="admin-orders-layout">
+            <div className="panel admin-orders-panel">
+              <div className="section-heading"><div><p className="eyebrow">Live queue</p><h2>Orders</h2></div></div>
+              <div className="admin-toolbar">
+                <input value={query} onChange={(event) => { setQuery(event.target.value); resetPage(); }} placeholder="Search order, customer, phone, address" />
+                <select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); resetPage(); }}>
+                  <option value="all">All statuses</option>
+                  {deliveryStages.slice(1).map((stage) => <option value={stage} key={stage}>{stage}</option>)}
+                </select>
+                <select value={zoneFilter} onChange={(event) => { setZoneFilter(event.target.value); resetPage(); }}>
+                  <option value="all">All zones</option>
+                  {zones.map((zone) => <option value={zone} key={zone}>{zone}</option>)}
+                </select>
+              </div>
+              <AdminOrderTable orders={pagedOrders} riders={riders} stores={stores} language={language} selectedOrderId={selectedOrder?.id} onSelectOrder={setSelectedOrderId} onStatusChange={onStatusChange} />
+              <div className="admin-pagination">
+                <span>{filteredOrders.length} results</span>
+                <div><button type="button" disabled={safePage === 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>Prev</button><strong>{safePage} / {pageCount}</strong><button type="button" disabled={safePage === pageCount} onClick={() => setPage((current) => Math.min(pageCount, current + 1))}>Next</button></div>
+              </div>
+            </div>
+            <AdminOrderDetail order={selectedOrder} riders={riders} stores={stores} language={language} onStatusChange={onStatusChange} />
+          </div>
+        )}
+
+        {section === "inventory" && <AdminInventory stores={stores} />}
+        {section === "riders" && <AdminRiders riders={riderLoad} stores={stores} />}
+        {section === "payments" && <AdminPayments orders={orders} riders={riders} stores={stores} language={language} selectedOrderId={selectedOrder?.id} onSelectOrder={setSelectedOrderId} onStatusChange={onStatusChange} revenue={revenue} pendingCash={pendingCash} />}
+        {section === "customers" && <AdminCustomers customers={customerRecords} orders={orders} />}
+        {section === "reports" && <AdminReports statusCounts={statusCounts} zoneCounts={zoneCounts} />}
+      </div>
+    </section>
+  );
+}
+
+function AdminOrderTable({ orders, riders, stores, language, selectedOrderId, onSelectOrder, onStatusChange }) {
+  if (orders.length === 0) return <div className="empty-state"><PackageCheck size={28} /> No matching orders</div>;
+  return (
+    <div className="admin-table-wrap">
+      <table className="admin-table admin-order-table">
+        <thead><tr><th>Order</th><th>Customer</th><th>Delivery</th><th>Store / rider</th><th>Payment</th><th>Status</th></tr></thead>
+        <tbody>
+          {orders.map((order) => {
+            const cylinder = cylinderTypes.find((item) => item.id === order.cylinder);
+            const rider = riders.find((item) => item.id === order.riderId);
+            const store = stores.find((item) => item.id === order.storeId);
+            return (
+              <tr className={selectedOrderId === order.id ? "selected" : ""} key={order.id} onClick={() => onSelectOrder(order.id)}>
+                <td><strong>{order.id}</strong><span>{cylinder ? `${order.quantity} x ${gasLabel(cylinder, language)}` : "Gas order"}</span></td>
+                <td><strong>{order.customer || "Customer"}</strong><span>{order.phone || "No phone"}</span></td>
+                <td><strong>{order.zone || "No zone"}</strong><span>{order.address || "No address"}</span></td>
+                <td><strong>{store?.name || "Store pending"}</strong><span>{rider?.name || "Rider pending"}</span></td>
+                <td><strong>{money(order.total || 0)}</strong><span>{order.paymentStatus || "Payment pending"}</span></td>
+                <td><select value={order.status} onClick={(event) => event.stopPropagation()} onChange={(event) => onStatusChange(order.id, event.target.value)}>{deliveryStages.slice(1).map((stage) => <option value={stage} key={stage}>{stage}</option>)}</select></td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function AdminOrderDetail({ order, riders, stores, language, onStatusChange }) {
+  if (!order) return <aside className="panel admin-detail-panel"><div className="empty-state"><Receipt size={28} /> Select an order</div></aside>;
+  const rider = riders.find((item) => item.id === order.riderId);
+  const store = stores.find((item) => item.id === order.storeId);
+  const cylinder = cylinderTypes.find((item) => item.id === order.cylinder);
+  return (
+    <aside className="panel admin-detail-panel">
+      <div className="section-heading"><div><p className="eyebrow">{order.id}</p><h2>{order.customer || "Customer"}</h2></div><span className="status-pill">{order.status}</span></div>
+      <div className="admin-detail-list">
+        <div><span>Phone</span><strong>{order.phone || "No phone"}</strong></div>
+        <div><span>Delivery</span><strong>{order.address || "No address"}, {order.zone || "No zone"}</strong></div>
+        <div><span>Gas</span><strong>{cylinder ? `${order.quantity} x ${gasLabel(cylinder, language)}` : "Gas order"}</strong></div>
+        <div><span>Store</span><strong>{store?.name || "Store pending"}</strong></div>
+        <div><span>Rider</span><strong>{rider?.name || "Rider pending"}</strong></div>
+        <div><span>Payment</span><strong>{order.paymentStatus || "Payment pending"} - {money(order.total || 0)}</strong></div>
+      </div>
+      <div className="admin-status-actions">{deliveryStages.slice(1).map((stage) => <button className={order.status === stage ? "active" : ""} type="button" key={stage} onClick={() => onStatusChange(order.id, stage)}>{stage}</button>)}</div>
+    </aside>
+  );
+}
+
+function AdminInventory({ stores }) {
+  return (
+    <div className="panel admin-compact-panel">
+      <div className="section-heading"><div><p className="eyebrow">Inventory</p><h2>Store stock</h2></div></div>
+      <div className="admin-table-wrap">
+        <table className="admin-table">
+          <thead><tr><th>Store</th><th>Zone</th><th>Riders</th><th>Total stock</th><th>Lowest item</th></tr></thead>
+          <tbody>
+            {stores.map((store) => {
+              const stockEntries = Object.entries(store.stock);
+              const stockCount = stockEntries.reduce((total, [, count]) => total + count, 0);
+              const lowItem = [...stockEntries].sort((a, b) => a[1] - b[1])[0];
+              return <tr key={store.id}><td>{store.name}</td><td>{store.zone}</td><td>{store.riders}</td><td>{stockCount}</td><td>{lowItem ? `${lowItem[0]} (${lowItem[1]})` : "Ready"}</td></tr>;
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function AdminRiders({ riders, stores }) {
+  return (
+    <div className="panel admin-compact-panel">
+      <div className="section-heading"><div><p className="eyebrow">Fleet</p><h2>Riders</h2></div></div>
+      <div className="admin-table-wrap">
+        <table className="admin-table">
+          <thead><tr><th>Rider</th><th>Vehicle</th><th>Phone</th><th>Store</th><th>Active</th></tr></thead>
+          <tbody>
+            {riders.map((rider) => <tr key={rider.id}><td>{rider.name}</td><td>{rider.vehicle}</td><td>{rider.phone}</td><td>{stores.find((store) => store.id === rider.storeId)?.name || "Unassigned"}</td><td>{rider.activeOrders}</td></tr>)}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function AdminPayments({ orders, riders, stores, language, selectedOrderId, onSelectOrder, onStatusChange, revenue, pendingCash }) {
+  return (
+    <div className="panel admin-compact-panel">
+      <div className="section-heading"><div><p className="eyebrow">Payments</p><h2>Collections</h2></div></div>
+      <div className="admin-metric-grid">
+        <div className="admin-metric-cell"><span>Total revenue</span><strong>{money(revenue)}</strong></div>
+        <div className="admin-metric-cell"><span>Cash pending</span><strong>{money(pendingCash)}</strong></div>
+        <div className="admin-metric-cell"><span>Paid orders</span><strong>{orders.filter((order) => order.payment !== "cash" || order.status === "Delivered").length}</strong></div>
+      </div>
+      <AdminOrderTable orders={orders.filter((order) => order.payment === "cash" || order.paymentStatus)} riders={riders} stores={stores} language={language} selectedOrderId={selectedOrderId} onSelectOrder={onSelectOrder} onStatusChange={onStatusChange} />
+    </div>
+  );
+}
+
+function AdminCustomers({ customers, orders }) {
+  return (
+    <div className="panel admin-compact-panel">
+      <div className="section-heading"><div><p className="eyebrow">Customers</p><h2>Customer records</h2></div></div>
+      <div className="admin-table-wrap">
+        <table className="admin-table">
+          <thead><tr><th>Name</th><th>Phone</th><th>Zone</th><th>Orders</th><th>Total spent</th></tr></thead>
+          <tbody>
+            {customers.map((customer) => {
+              const key = customer.phone || customer.customer || customer.id;
+              const customerOrders = orders.filter((order) => (order.phone || order.customer || order.id) === key);
+              return <tr key={key}><td>{customer.customer || "Customer"}</td><td>{customer.phone || "No phone"}</td><td>{customer.zone || "No zone"}</td><td>{customerOrders.length}</td><td>{money(customerOrders.reduce((total, order) => total + (order.total || 0), 0))}</td></tr>;
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function AdminReports({ statusCounts, zoneCounts }) {
+  return (
+    <div className="admin-overview-grid">
+      <div className="panel admin-compact-panel">
+        <div className="section-heading"><div><p className="eyebrow">Status mix</p><h2>Pipeline</h2></div></div>
+        <div className="admin-store-list">
+          {deliveryStages.slice(1).map((stage) => <div className="admin-store-row" key={stage}><div><strong>{stage}</strong><span>Orders in stage</span></div><b>{statusCounts[stage] || 0}</b></div>)}
+        </div>
+      </div>
+      <div className="panel admin-compact-panel">
+        <div className="section-heading"><div><p className="eyebrow">Zones</p><h2>Demand by area</h2></div></div>
+        <div className="admin-store-list">
+          {zoneCounts.slice(0, 6).map((item) => <div className="admin-store-row" key={item.zone}><div><strong>{item.zone}</strong><span>{money(item.revenue)}</span></div><b>{item.orders}</b></div>)}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1259,9 +1763,15 @@ function LeafletTrackingMap({ store, destination, riderLocation, routeLocations,
   return (
     <>
       <div className="bolt-route-bar">
+        <button className="route-bar-icon" type="button" aria-label="Close route">
+          <X size={23} />
+        </button>
         <span>{store.name}</span>
-        <Route size={18} />
+        <ArrowRight size={18} />
         <strong>{destination.label}</strong>
+        <button className="route-bar-icon" type="button" aria-label="Add stop">
+          <Plus size={25} />
+        </button>
       </div>
       <div className="leaflet-tracking-map" ref={mapElementRef} />
     </>
