@@ -17,6 +17,8 @@ export function TanzaniaPhoneInput({ value, onChange }) {
         onChange={(event) => onChange(fullTanzaniaPhone(event.target.value))}
         placeholder="777305695"
         inputMode="numeric"
+        pattern="[67][0-9]{8}"
+        title="Enter a valid Tanzania mobile number, for example 777305695"
         maxLength={9}
       />
     </span>

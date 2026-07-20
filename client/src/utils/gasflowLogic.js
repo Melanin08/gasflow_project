@@ -1,10 +1,10 @@
 import { paymentMethods, promoCodes, riders, stores, zanzibarPlaces, zones, zonePins } from "../data/gasflowData.js";
 
-export const zanzibarBounds = {
-  south: -6.55,
-  west: 39.05,
-  north: -5.65,
-  east: 39.75
+export const tanzaniaBounds = {
+  south: -11.9,
+  west: 29.0,
+  north: -0.8,
+  east: 40.6
 };
 
 export function money(value) {
@@ -56,6 +56,10 @@ export function localTanzaniaPhone(value) {
   return digits.slice(0, 9);
 }
 
+export function isValidTanzaniaPhone(value) {
+  return /^[67]\d{8}$/.test(localTanzaniaPhone(value));
+}
+
 export function fullTanzaniaPhone(value) {
   const local = localTanzaniaPhone(value);
   return local ? `+255 ${local.slice(0, 3)} ${local.slice(3, 6)} ${local.slice(6)}`.trim() : "";
@@ -77,10 +81,10 @@ export function placeToLocation(place) {
 
 export function isZanzibarLocation(location) {
   return Boolean(location)
-    && location.lat >= zanzibarBounds.south
-    && location.lat <= zanzibarBounds.north
-    && location.lng >= zanzibarBounds.west
-    && location.lng <= zanzibarBounds.east;
+    && location.lat >= tanzaniaBounds.south
+    && location.lat <= tanzaniaBounds.north
+    && location.lng >= tanzaniaBounds.west
+    && location.lng <= tanzaniaBounds.east;
 }
 
 export function placeFromMapResult(result) {
@@ -104,15 +108,13 @@ export function placeFromMapResult(result) {
   };
 }
 
-function zanzibarSearchParams(query, limit = "7") {
+function tanzaniaSearchParams(query, limit = "7") {
   return new URLSearchParams({
     format: "jsonv2",
     addressdetails: "1",
     limit,
     countrycodes: "tz",
-    viewbox: `${zanzibarBounds.west},${zanzibarBounds.north},${zanzibarBounds.east},${zanzibarBounds.south}`,
-    bounded: "1",
-    q: `${query}, Zanzibar, Tanzania`
+    q: `${query}, Tanzania`
   });
 }
 
@@ -120,7 +122,7 @@ export async function searchTanzaniaPlaces(query, signal) {
   const trimmedQuery = query.trim();
   if (trimmedQuery.length < 3) return [];
 
-  const params = zanzibarSearchParams(trimmedQuery);
+  const params = tanzaniaSearchParams(trimmedQuery);
   const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, {
     headers: { Accept: "application/json" },
     signal
@@ -222,7 +224,7 @@ export function distanceText(kilometers) {
 
 export async function geocodeDeliveryAddress(address, zone) {
   const query = zone ? `${address}, ${zone}` : address;
-  const params = zanzibarSearchParams(query, "1");
+  const params = tanzaniaSearchParams(query, "1");
   const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, {
     headers: { Accept: "application/json" }
   });
@@ -250,7 +252,14 @@ export async function resolveDeliveryLocation(address, zone, currentLocation) {
     if (!currentLocation) throw new Error("Map search failed");
   }
 
-  return null;
+  const fallback = zonePin(zone);
+  return {
+    lat: fallback.lat,
+    lng: fallback.lng,
+    label: address,
+    zone,
+    source: "typed-address"
+  };
 }
 
 export function remainingEtaSeconds(order, currentLocation, destination, nowMs) {

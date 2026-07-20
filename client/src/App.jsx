@@ -5,8 +5,11 @@ import {
   ArrowRight,
   Bell,
   Bike,
+  ChartNoAxesColumn,
   CheckCircle2,
   Clock3,
+  Eye,
+  EyeOff,
   Flame,
   Gift,
   Languages,
@@ -20,6 +23,7 @@ import {
   Plus,
   QrCode,
   Receipt,
+  ScrollText,
   Route,
   Send,
   Share2,
@@ -59,7 +63,7 @@ import {
   getPaymentMethod,
   getStoreScore,
   isZanzibarRoadRoute,
-  localTanzaniaPhone,
+  isValidTanzaniaPhone,
   loyaltyPointsFor,
   money,
   orderDestination,
@@ -94,15 +98,35 @@ const roleCredentials = {
     usernameLabel: "Admin email",
     passwordLabel: "Password",
     username: "admin@iitmz.ac.in"
+  },
+  supplier: {
+    label: "Supplier",
+    usernameLabel: "Supplier email",
+    passwordLabel: "Password",
+    username: "supplier@iitmz.ac.in"
   }
 };
 
 const STAFF_EMAIL_DOMAIN = "@iitmz.ac.in";
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:5001";
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
+const ORDER_STORAGE_KEY = "gasflowOrders";
+const STORE_STORAGE_KEY = "gasflowStores";
+const PROMO_STORAGE_KEY = "gasflowPromos";
+const RIDER_LOCATION_STORAGE_KEY = "gasflowRiderLocations";
+
+function readStoredValue(key, fallback) {
+  try {
+    const value = window.localStorage.getItem(key);
+    return value ? JSON.parse(value) : fallback;
+  } catch {
+    return fallback;
+  }
+}
 
 function portalFromHash() {
   const portal = window.location.hash.replace("#", "").toLowerCase();
-  return portal === "admin" || portal === "rider" ? portal : "customer";
+  return portal === "admin" || portal === "rider" || portal === "supplier" ? portal : "customer";
 }
 
 function loadLeaflet() {
@@ -147,8 +171,8 @@ export default function App() {
   const [hasEnteredApp, setHasEnteredApp] = useState(false);
   const [view, setView] = useState("dispatch");
   const [orderStep, setOrderStep] = useState("details");
-  const [orders, setOrders] = useState(initialOrders);
-  const [riderLocations, setRiderLocations] = useState({});
+  const [orders, setOrders] = useState(() => readStoredValue(ORDER_STORAGE_KEY, initialOrders));
+  const [riderLocations, setRiderLocations] = useState(() => readStoredValue(RIDER_LOCATION_STORAGE_KEY, {}));
   const [riderGpsStatus, setRiderGpsStatus] = useState({ sharing: false, message: "" });
   const [gpsWatchId, setGpsWatchId] = useState(null);
   const [dispatchMessage, setDispatchMessage] = useState({ type: "", text: "" });
@@ -161,6 +185,8 @@ export default function App() {
   const [welcomeNotice, setWelcomeNotice] = useState("");
   const [mapAddressSuggestions, setMapAddressSuggestions] = useState([]);
   const [addressSearchStatus, setAddressSearchStatus] = useState("idle");
+  const [managedStores, setManagedStores] = useState(() => readStoredValue(STORE_STORAGE_KEY, stores));
+  const [managedPromoCodes, setManagedPromoCodes] = useState(() => readStoredValue(PROMO_STORAGE_KEY, promoCodes));
 
   const t = text[language];
   const filteredCylinderTypes = cylinderTypes.filter((item) => item.category === form.category);
@@ -171,9 +197,13 @@ export default function App() {
   const hasDeliveryZone = Boolean(form.zone);
   const canMatchStore = hasMappedDeliveryPlace && hasDeliveryZone && Boolean(form.cylinder);
   const subtotal = (selectedCylinder?.price || 0) * form.quantity;
-  const discount = promoDiscount(subtotal, form.promoCode);
+  const activePromo = managedPromoCodes[form.promoCode.trim().toUpperCase()];
+  const discount = activePromo
+    ? activePromo.type === "percent"
+      ? Math.round((subtotal * activePromo.value) / 100)
+      : Math.min(subtotal, activePromo.value)
+    : 0;
   const total = Math.max(0, subtotal - discount);
-  const activePromo = promoCodes[form.promoCode.trim().toUpperCase()];
   const addressSuggestions = mapAddressSuggestions;
   const formDestination = useMemo(() => {
     const fallback = form.deliveryLocation;
@@ -186,35 +216,78 @@ export default function App() {
   }, [form.address, form.deliveryLocation]);
   const bestStore = useMemo(() => {
     if (!formDestination || !form.cylinder) return null;
-    return recommendStore(formDestination, form.cylinder, form.quantity);
-  }, [form.cylinder, form.quantity, formDestination]);
+    return managedStores
+      .map((store) => ({
+        ...store,
+        canServe: (store.stock[form.cylinder] || 0) >= form.quantity && store.riders > 0
+      }))
+      .sort((a, b) => getStoreScore(a, formDestination, form.cylinder, form.quantity) - getStoreScore(b, formDestination, form.cylinder, form.quantity))[0] || null;
+  }, [form.cylinder, form.quantity, formDestination, managedStores]);
   const isOrderSummaryReady = Boolean(selectedCylinder && bestStore && selectedPayment);
   const storeOptions = useMemo(() => {
     if (!formDestination || !form.cylinder) return [];
-    return stores
+    return managedStores
       .map((store) => ({
         ...store,
         distance: distanceKm(store, formDestination),
         canServe: (store.stock[form.cylinder] || 0) >= form.quantity && store.riders > 0
       }))
       .sort((a, b) => getStoreScore(a, formDestination, form.cylinder, form.quantity) - getStoreScore(b, formDestination, form.cylinder, form.quantity));
-  }, [form.cylinder, form.quantity, formDestination]);
+  }, [form.cylinder, form.quantity, formDestination, managedStores]);
 
   const trackingOrder = orders[0];
   const assignedRider = trackingOrder ? riders.find((item) => item.id === trackingOrder.riderId) : null;
   const activeRiderLocation = trackingOrder ? riderLocations[trackingOrder.riderId] : null;
-  const portalTitle = portal === "admin" ? "GasFlow Admin" : portal === "rider" ? "GasFlow Rider" : t.hero;
-  const portalEyebrow = portal === "admin" ? "Operations dashboard" : portal === "rider" ? t.riderLocationSender : t.eyebrow;
+  const portalTitle = portal === "admin" ? "GasFlow Admin" : portal === "rider" ? "GasFlow Rider" : portal === "supplier" ? "GasFlow Supplier" : t.hero;
+  const portalEyebrow = portal === "admin" ? "Operations dashboard" : portal === "rider" ? t.riderLocationSender : portal === "supplier" ? "Depot dashboard" : t.eyebrow;
   const visibleViews = portal === "admin"
     ? [["admin", "Admin"]]
     : portal === "rider"
       ? [["rider", t.riderGps]]
+      : portal === "supplier"
+        ? [["supplier", "Supplier"]]
       : [["dispatch", t.placeOrder], ["tracking", t.trackOrder]];
   const activeSession = sessions[portal]?.expiresAtMs > Date.now() ? sessions[portal] : null;
 
   useEffect(() => {
     const timerId = window.setInterval(() => setNowMs(Date.now()), 1000);
     return () => window.clearInterval(timerId);
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(ORDER_STORAGE_KEY, JSON.stringify(orders));
+  }, [orders]);
+
+  useEffect(() => {
+    window.localStorage.setItem(STORE_STORAGE_KEY, JSON.stringify(managedStores));
+  }, [managedStores]);
+
+  useEffect(() => {
+    window.localStorage.setItem(PROMO_STORAGE_KEY, JSON.stringify(managedPromoCodes));
+  }, [managedPromoCodes]);
+
+  useEffect(() => {
+    window.localStorage.setItem(RIDER_LOCATION_STORAGE_KEY, JSON.stringify(riderLocations));
+  }, [riderLocations]);
+
+  useEffect(() => {
+    function syncSharedData(event) {
+      if (event.key === ORDER_STORAGE_KEY) {
+        setOrders(event.newValue ? JSON.parse(event.newValue) : initialOrders);
+      }
+      if (event.key === STORE_STORAGE_KEY) {
+        setManagedStores(event.newValue ? JSON.parse(event.newValue) : stores);
+      }
+      if (event.key === PROMO_STORAGE_KEY) {
+        setManagedPromoCodes(event.newValue ? JSON.parse(event.newValue) : promoCodes);
+      }
+      if (event.key === RIDER_LOCATION_STORAGE_KEY) {
+        setRiderLocations(event.newValue ? JSON.parse(event.newValue) : {});
+      }
+    }
+
+    window.addEventListener("storage", syncSharedData);
+    return () => window.removeEventListener("storage", syncSharedData);
   }, []);
 
   useEffect(() => {
@@ -227,6 +300,9 @@ export default function App() {
       } else if (nextPortal === "rider") {
         setHasEnteredApp(true);
         setView("rider");
+      } else if (nextPortal === "supplier") {
+        setHasEnteredApp(true);
+        setView("supplier");
       } else {
         setView((current) => current === "tracking" ? "tracking" : "dispatch");
       }
@@ -513,7 +589,7 @@ export default function App() {
       return;
     }
 
-    if (localTanzaniaPhone(form.phone).length !== 9) {
+    if (!isValidTanzaniaPhone(form.phone)) {
       setDispatchMessage({ type: "error", text: t.enterCustomerPhone });
       return;
     }
@@ -543,7 +619,7 @@ export default function App() {
       return;
     }
 
-    if (localTanzaniaPhone(form.phone).length !== 9) {
+    if (!isValidTanzaniaPhone(form.phone)) {
       setDispatchMessage({ type: "error", text: t.enterCustomerPhone });
       return;
     }
@@ -571,7 +647,7 @@ export default function App() {
     const isCashOrder = selectedPayment.id === "cash";
     const paymentPhone = form.paymentPhone.trim() || form.phone.trim();
 
-    if (!isCashOrder && localTanzaniaPhone(paymentPhone).length !== 9) {
+    if (!isCashOrder && !isValidTanzaniaPhone(paymentPhone)) {
       setDispatchMessage({ type: "error", text: `${t.enterPaymentPhone} ${selectedPaymentText.name}.` });
       return;
     }
@@ -605,7 +681,12 @@ export default function App() {
       setIsSubmittingOrder(false);
     }
 
-    const store = recommendStore(deliveryLocation, form.cylinder, form.quantity);
+    const store = managedStores
+      .map((item) => ({
+        ...item,
+        canServe: (item.stock[form.cylinder] || 0) >= form.quantity && item.riders > 0
+      }))
+      .sort((a, b) => getStoreScore(a, deliveryLocation, form.cylinder, form.quantity) - getStoreScore(b, deliveryLocation, form.cylinder, form.quantity))[0];
     const rider = pickRider(store.id);
     const createdAtMs = Date.now();
     const initialEta = deliveryEtaEstimate(store, deliveryLocation, form.quantity);
@@ -686,6 +767,63 @@ export default function App() {
         };
       })
     );
+  }
+
+  function assignOrderRider(orderId, riderId) {
+    setOrders((current) =>
+      current.map((order) => (
+        order.id === orderId
+          ? { ...order, riderId, status: order.status === "Accepted" ? "Rider assigned" : order.status }
+          : order
+      ))
+    );
+  }
+
+  function addDepot(depot) {
+    const id = `st-${String(managedStores.length + 1).padStart(2, "0")}`;
+    const stock = cylinderTypes.reduce((nextStock, cylinder) => ({ ...nextStock, [cylinder.id]: Number(depot.stock || 0) }), {});
+    setManagedStores((current) => [
+      ...current,
+      {
+        id,
+        name: depot.name.trim(),
+        zone: depot.zone,
+        lat: Number(depot.lat) || -6.1629,
+        lng: Number(depot.lng) || 39.1926,
+        riders: Number(depot.riders) || 0,
+        open: true,
+        stock
+      }
+    ]);
+  }
+
+  function updateDepotStock(storeId, cylinderId, value) {
+    setManagedStores((current) =>
+      current.map((store) => (
+        store.id === storeId
+          ? { ...store, stock: { ...store.stock, [cylinderId]: Math.max(0, Number(value) || 0) } }
+          : store
+      ))
+    );
+  }
+
+  function savePromo(code, promo) {
+    setManagedPromoCodes((current) => ({
+      ...current,
+      [code.trim().toUpperCase()]: {
+        type: promo.type,
+        value: Number(promo.value) || 0,
+        label: promo.label.trim() || `${promo.value} ${promo.type === "percent" ? "% off" : "TZS off"}`
+      }
+    }));
+  }
+
+  function removePromo(code) {
+    setManagedPromoCodes((current) => {
+      const next = { ...current };
+      delete next[code];
+      return next;
+    });
   }
 
   function rateOrder(orderId, rating) {
@@ -1149,12 +1287,12 @@ export default function App() {
                     <h2>{trackingOrder.id}</h2>
                     <span>{trackingOrder.status}</span>
                   </div>
-                  <strong>{etaRangeText(stores.find((item) => item.id === trackingOrder.storeId) || stores[0], orderDestination(trackingOrder), trackingOrder.quantity || 1)}</strong>
+                  <strong>{etaRangeText(managedStores.find((item) => item.id === trackingOrder.storeId) || managedStores[0], orderDestination(trackingOrder), trackingOrder.quantity || 1)}</strong>
                 </div>
                 <div className="rider-job-route">
                   <div>
                     <Store size={18} />
-                    <span>{stores.find((item) => item.id === trackingOrder.storeId)?.name || t.depot}</span>
+                    <span>{managedStores.find((item) => item.id === trackingOrder.storeId)?.name || t.depot}</span>
                   </div>
                   <Route size={18} />
                   <div>
@@ -1228,9 +1366,27 @@ export default function App() {
         <AdminDashboard
           orders={orders}
           riders={riders}
-          stores={stores}
+          stores={managedStores}
+          promoCodes={managedPromoCodes}
           language={language}
           onStatusChange={updateOrderStatus}
+          onAssignRider={assignOrderRider}
+          onAddDepot={addDepot}
+          onUpdateStock={updateDepotStock}
+          onSavePromo={savePromo}
+          onRemovePromo={removePromo}
+        />
+      )}
+
+      {portal === "supplier" && activeSession && view === "supplier" && (
+        <SupplierDashboard
+          orders={orders}
+          riders={riders}
+          stores={managedStores}
+          language={language}
+          onStatusChange={updateOrderStatus}
+          onAssignRider={assignOrderRider}
+          onUpdateStock={updateDepotStock}
         />
       )}
     </main>
@@ -1239,53 +1395,208 @@ export default function App() {
 
 function RoleLogin({ role, onLogin }) {
   const config = roleCredentials[role];
+  const [mode, setMode] = useState("login");
+  const [name, setName] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [resetToken, setResetToken] = useState("");
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleReady, setIsGoogleReady] = useState(Boolean(window.google));
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const googleButtonRef = useRef(null);
+  const isForgotMode = mode === "forgot";
+  const title = mode === "register" ? "Create staff account" : isForgotMode ? "Reset password" : "Sign in to continue";
+  const submitLabel = mode === "register" ? "Register" : isForgotMode ? (resetToken ? "Save new password" : "Send reset link") : "Login";
 
-  async function submitLogin(event) {
+  useEffect(() => {
+    if (!GOOGLE_CLIENT_ID || !window.google) return;
+
+    window.google.accounts.id.initialize({
+      client_id: GOOGLE_CLIENT_ID,
+      callback: (response) => {
+        const payload = decodeGoogleCredential(response.credential);
+        if (!payload?.email) {
+          setError("Google sign-in did not return an email.");
+          return;
+        }
+        submitGoogleLogin(payload.email, payload.name || "");
+      }
+    });
+    setIsGoogleReady(true);
+  }, [isGoogleReady, role]);
+
+  useEffect(() => {
+    if (mode !== "login" || !GOOGLE_CLIENT_ID || !window.google || !googleButtonRef.current) return;
+
+    googleButtonRef.current.innerHTML = "";
+    window.google.accounts.id.renderButton(googleButtonRef.current, {
+      theme: "outline",
+      size: "large",
+      width: 320,
+      text: "signin_with"
+    });
+  }, [isGoogleReady, mode, role]);
+
+  useEffect(() => {
+    if (!GOOGLE_CLIENT_ID || window.google || document.querySelector("script[data-google-identity]")) return;
+
+    const script = document.createElement("script");
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.defer = true;
+    script.dataset.googleIdentity = "true";
+    script.onload = () => setIsGoogleReady(Boolean(window.google));
+    script.onerror = () => setIsGoogleReady(false);
+    document.body.appendChild(script);
+  }, []);
+
+  function startGoogleSignIn() {
+    if (!GOOGLE_CLIENT_ID) {
+      setError("Add VITE_GOOGLE_CLIENT_ID to enable Google sign-in.");
+      return;
+    }
+
+    if (!window.google || !isGoogleReady) {
+      setError("Google sign-in is still loading. Try again in a moment.");
+      return;
+    }
+
+    setError("");
+    window.google.accounts.id.prompt();
+  }
+
+  function switchMode(nextMode) {
+    setMode(nextMode);
+    setPassword("");
+    setConfirmPassword("");
+    setResetToken("");
+    setError("");
+    setNotice("");
+    setShowPassword(false);
+    setShowConfirmPassword(false);
+  }
+
+  function finishAuth(result) {
+    onLogin(role, {
+      role: result.user.role,
+      username: result.user.email,
+      token: result.token,
+      expiresAtMs: Date.now() + (result.expiresIn * 1000),
+      signedInAtMs: Date.now()
+    });
+  }
+
+  function decodeGoogleCredential(credential) {
+    try {
+      const payload = credential.split(".")[1];
+      const decoded = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
+      return JSON.parse(decodeURIComponent(Array.from(decoded).map((char) => `%${char.charCodeAt(0).toString(16).padStart(2, "0")}`).join("")));
+    } catch {
+      return null;
+    }
+  }
+
+  async function submitGoogleLogin(email, googleName) {
+    setIsLoading(true);
+    setError("");
+    setNotice("");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/auth/google`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          role,
+          email: email.toLowerCase(),
+          name: googleName
+        })
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        setError(result.error || "Google sign-in failed.");
+        return;
+      }
+
+      finishAuth(result);
+    } catch {
+      setError("Cannot reach the backend server. Start it with npm run server.");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function submitAuth(event) {
     event.preventDefault();
-    const cleanUsername = username.trim();
-    const normalizedUsername = cleanUsername.toLowerCase();
+    const normalizedUsername = username.trim().toLowerCase();
 
     if (!normalizedUsername.endsWith(STAFF_EMAIL_DOMAIN)) {
       setError(`Use your ${STAFF_EMAIL_DOMAIN} email.`);
       return;
     }
 
-    if (!password.trim()) {
+    if (!isForgotMode && !password.trim()) {
       setError("Enter your password.");
+      return;
+    }
+
+    if (mode === "register" && password.trim().length < 6) {
+      setError("Password must be at least 6 characters.");
+      return;
+    }
+
+    if (mode === "register" && password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+
+    if (isForgotMode && resetToken && password.trim().length < 6) {
+      setError("Enter a new password with at least 6 characters.");
       return;
     }
 
     setIsLoading(true);
     setError("");
+    setNotice("");
+
+    const endpoint = mode === "register"
+      ? "/api/auth/register"
+      : isForgotMode && resetToken
+        ? "/api/auth/reset-password"
+        : isForgotMode
+          ? "/api/auth/forgot-password"
+          : "/api/auth/login";
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           role,
           email: normalizedUsername,
-          password
+          password,
+          name,
+          resetToken
         })
       });
       const result = await response.json();
 
       if (!response.ok) {
-        setError(result.error || "Login failed.");
+        setError(result.error || "Request failed.");
         return;
       }
 
-      onLogin(role, {
-        role: result.user.role,
-        username: result.user.email,
-        token: result.token,
-        expiresAtMs: Date.now() + (result.expiresIn * 1000),
-        signedInAtMs: Date.now()
-      });
+      if (isForgotMode && !resetToken) {
+        setResetToken(result.resetToken || "");
+        setNotice("Reset approved. Enter a new password now.");
+        return;
+      }
+
+      finishAuth(result);
     } catch {
       setError("Cannot reach the backend server. Start it with npm run server.");
     } finally {
@@ -1295,33 +1606,84 @@ function RoleLogin({ role, onLogin }) {
 
   return (
     <section className="workspace auth-workspace">
-      <form className="panel auth-card" onSubmit={submitLogin}>
+      <form className="panel auth-card" onSubmit={submitAuth}>
         <span className="auth-lock"><Lock size={24} /></span>
         <div>
           <p className="eyebrow">{config.label} access</p>
-          <h2>Sign in to continue</h2>
+          <h2>{title}</h2>
         </div>
+        {mode === "register" && (
+          <label>
+            Full name
+            <input value={name} onChange={(event) => setName(event.target.value)} placeholder={`${config.label} name`} />
+          </label>
+        )}
         <label>
           {config.usernameLabel}
           <input value={username} onChange={(event) => setUsername(event.target.value)} placeholder={config.username} />
         </label>
-        <label>
-          {config.passwordLabel}
-          <input value={password} onChange={(event) => setPassword(event.target.value)} type="password" placeholder="Your password" />
-        </label>
+        {(!isForgotMode || resetToken) && (
+          <label className="password-label">
+            {isForgotMode ? "New password" : config.passwordLabel}
+            <span className="password-field">
+              <input value={password} onChange={(event) => setPassword(event.target.value)} type={showPassword ? "text" : "password"} placeholder={isForgotMode ? "New password" : "Your password"} />
+              <button type="button" onClick={() => setShowPassword((current) => !current)} aria-label={showPassword ? "Hide password" : "Show password"}>
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </span>
+          </label>
+        )}
+        {mode === "register" && (
+          <label className="password-label">
+            Confirm password
+            <span className="password-field">
+              <input value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} type={showConfirmPassword ? "text" : "password"} placeholder="Confirm password" />
+              <button type="button" onClick={() => setShowConfirmPassword((current) => !current)} aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}>
+                {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </span>
+          </label>
+        )}
+        {notice && <div className="dispatch-feedback success"><CheckCircle2 size={18} /><span>{notice}</span></div>}
         {error && <div className="dispatch-feedback error"><AlertTriangle size={18} /><span>{error}</span></div>}
         <button className="primary-action" type="submit" disabled={isLoading}>
-          <Lock size={17} /> {isLoading ? "Checking..." : "Login"}
+          <Lock size={17} /> {isLoading ? "Checking..." : submitLabel}
         </button>
-        <p className="auth-note">
-          Staff access is checked by the backend. Use a {STAFF_EMAIL_DOMAIN} email.
-        </p>
+        {mode === "login" && (
+          <div className="auth-text-actions">
+            <button type="button" onClick={() => switchMode("register")}>Register</button>
+            <button type="button" onClick={() => switchMode("forgot")}>Forgot password?</button>
+          </div>
+        )}
+        {mode !== "login" && (
+          <div className="auth-text-actions single">
+            <button type="button" onClick={() => switchMode("login")}>Back to sign in</button>
+          </div>
+        )}
+        {mode === "login" && (
+          <>
+            <div className="auth-divider"><span>or</span></div>
+            {GOOGLE_CLIENT_ID ? (
+              <div className="google-login-slot" ref={googleButtonRef}>
+                {!isGoogleReady && (
+                  <button className="google-action" type="button" onClick={startGoogleSignIn}>
+                    <span>G</span> Sign in with Google
+                  </button>
+                )}
+              </div>
+            ) : (
+              <button className="google-action" type="button" onClick={startGoogleSignIn}>
+                <span>G</span> Sign in with Google
+              </button>
+            )}
+          </>
+        )}
       </form>
     </section>
   );
 }
 
-function AdminDashboard({ orders, riders, stores, language, onStatusChange }) {
+function AdminDashboard({ orders, riders, stores, promoCodes, language, onStatusChange, onAssignRider, onAddDepot, onUpdateStock, onSavePromo, onRemovePromo }) {
   const [section, setSection] = useState("overview");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -1355,7 +1717,17 @@ function AdminDashboard({ orders, riders, stores, language, onStatusChange }) {
     orders: orders.filter((order) => order.zone === zone).length,
     revenue: orders.filter((order) => order.zone === zone).reduce((total, order) => total + (order.total || 0), 0)
   })).sort((a, b) => b.orders - a.orders);
-  const sections = ["overview", "orders", "inventory", "riders", "payments", "customers", "reports"];
+  const sections = [
+    { id: "overview", label: "Overview", icon: ChartNoAxesColumn },
+    { id: "orders", label: "Orders", icon: PackageCheck },
+    { id: "depots", label: "Depots", icon: Store },
+    { id: "inventory", label: "Inventory", icon: Store },
+    { id: "riders", label: "Riders", icon: Users },
+    { id: "payments", label: "Payments", icon: WalletCards },
+    { id: "promotions", label: "Promos", icon: Gift },
+    { id: "customers", label: "Customers", icon: Users },
+    { id: "reports", label: "Reports", icon: ScrollText }
+  ];
 
   function resetPage() {
     setPage(1);
@@ -1373,8 +1745,9 @@ function AdminDashboard({ orders, riders, stores, language, onStatusChange }) {
 
       <nav className="admin-section-tabs" aria-label="Admin sections">
         {sections.map((item) => (
-          <button className={section === item ? "active" : ""} type="button" key={item} onClick={() => setSection(item)}>
-            {item[0].toUpperCase() + item.slice(1)}
+          <button className={section === item.id ? "active" : ""} type="button" key={item.id} onClick={() => setSection(item.id)}>
+            <item.icon size={19} />
+            <span>{item.label}</span>
           </button>
         ))}
       </nav>
@@ -1405,7 +1778,7 @@ function AdminDashboard({ orders, riders, stores, language, onStatusChange }) {
             </div>
             <div className="panel admin-orders-panel admin-overview-orders">
               <div className="section-heading"><div><p className="eyebrow">Newest</p><h2>Recent orders</h2></div></div>
-              <AdminOrderTable orders={orders.slice(0, 5)} riders={riders} stores={stores} language={language} selectedOrderId={selectedOrder?.id} onSelectOrder={setSelectedOrderId} onStatusChange={onStatusChange} />
+              <AdminOrderTable orders={orders.slice(0, 5)} riders={riders} stores={stores} language={language} selectedOrderId={selectedOrder?.id} onSelectOrder={setSelectedOrderId} onStatusChange={onStatusChange} onAssignRider={onAssignRider} />
             </div>
           </div>
         )}
@@ -1425,19 +1798,21 @@ function AdminDashboard({ orders, riders, stores, language, onStatusChange }) {
                   {zones.map((zone) => <option value={zone} key={zone}>{zone}</option>)}
                 </select>
               </div>
-              <AdminOrderTable orders={pagedOrders} riders={riders} stores={stores} language={language} selectedOrderId={selectedOrder?.id} onSelectOrder={setSelectedOrderId} onStatusChange={onStatusChange} />
+              <AdminOrderTable orders={pagedOrders} riders={riders} stores={stores} language={language} selectedOrderId={selectedOrder?.id} onSelectOrder={setSelectedOrderId} onStatusChange={onStatusChange} onAssignRider={onAssignRider} />
               <div className="admin-pagination">
                 <span>{filteredOrders.length} results</span>
                 <div><button type="button" disabled={safePage === 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>Prev</button><strong>{safePage} / {pageCount}</strong><button type="button" disabled={safePage === pageCount} onClick={() => setPage((current) => Math.min(pageCount, current + 1))}>Next</button></div>
               </div>
             </div>
-            <AdminOrderDetail order={selectedOrder} riders={riders} stores={stores} language={language} onStatusChange={onStatusChange} />
+            <AdminOrderDetail order={selectedOrder} riders={riders} stores={stores} language={language} onStatusChange={onStatusChange} onAssignRider={onAssignRider} />
           </div>
         )}
 
-        {section === "inventory" && <AdminInventory stores={stores} />}
+        {section === "depots" && <AdminDepots stores={stores} onAddDepot={onAddDepot} />}
+        {section === "inventory" && <AdminInventory stores={stores} onUpdateStock={onUpdateStock} />}
         {section === "riders" && <AdminRiders riders={riderLoad} stores={stores} />}
         {section === "payments" && <AdminPayments orders={orders} riders={riders} stores={stores} language={language} selectedOrderId={selectedOrder?.id} onSelectOrder={setSelectedOrderId} onStatusChange={onStatusChange} revenue={revenue} pendingCash={pendingCash} />}
+        {section === "promotions" && <AdminPromotions promoCodes={promoCodes} onSavePromo={onSavePromo} onRemovePromo={onRemovePromo} />}
         {section === "customers" && <AdminCustomers customers={customerRecords} orders={orders} />}
         {section === "reports" && <AdminReports statusCounts={statusCounts} zoneCounts={zoneCounts} />}
       </div>
@@ -1445,7 +1820,7 @@ function AdminDashboard({ orders, riders, stores, language, onStatusChange }) {
   );
 }
 
-function AdminOrderTable({ orders, riders, stores, language, selectedOrderId, onSelectOrder, onStatusChange }) {
+function AdminOrderTable({ orders, riders, stores, language, selectedOrderId, onSelectOrder, onStatusChange, onAssignRider }) {
   if (orders.length === 0) return <div className="empty-state"><PackageCheck size={28} /> No matching orders</div>;
   return (
     <div className="admin-table-wrap">
@@ -1461,7 +1836,17 @@ function AdminOrderTable({ orders, riders, stores, language, selectedOrderId, on
                 <td><strong>{order.id}</strong><span>{cylinder ? `${order.quantity} x ${gasLabel(cylinder, language)}` : "Gas order"}</span></td>
                 <td><strong>{order.customer || "Customer"}</strong><span>{order.phone || "No phone"}</span></td>
                 <td><strong>{order.zone || "No zone"}</strong><span>{order.address || "No address"}</span></td>
-                <td><strong>{store?.name || "Store pending"}</strong><span>{rider?.name || "Rider pending"}</span></td>
+                <td>
+                  <strong>{store?.name || "Store pending"}</strong>
+                  {onAssignRider ? (
+                    <select value={order.riderId || ""} onClick={(event) => event.stopPropagation()} onChange={(event) => onAssignRider(order.id, event.target.value)}>
+                      <option value="">Rider pending</option>
+                      {riders.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}
+                    </select>
+                  ) : (
+                    <span>{rider?.name || "Rider pending"}</span>
+                  )}
+                </td>
                 <td><strong>{money(order.total || 0)}</strong><span>{order.paymentStatus || "Payment pending"}</span></td>
                 <td><select value={order.status} onClick={(event) => event.stopPropagation()} onChange={(event) => onStatusChange(order.id, event.target.value)}>{deliveryStages.slice(1).map((stage) => <option value={stage} key={stage}>{stage}</option>)}</select></td>
               </tr>
@@ -1473,7 +1858,7 @@ function AdminOrderTable({ orders, riders, stores, language, selectedOrderId, on
   );
 }
 
-function AdminOrderDetail({ order, riders, stores, language, onStatusChange }) {
+function AdminOrderDetail({ order, riders, stores, language, onStatusChange, onAssignRider }) {
   if (!order) return <aside className="panel admin-detail-panel"><div className="empty-state"><Receipt size={28} /> Select an order</div></aside>;
   const rider = riders.find((item) => item.id === order.riderId);
   const store = stores.find((item) => item.id === order.storeId);
@@ -1481,35 +1866,109 @@ function AdminOrderDetail({ order, riders, stores, language, onStatusChange }) {
   return (
     <aside className="panel admin-detail-panel">
       <div className="section-heading"><div><p className="eyebrow">{order.id}</p><h2>{order.customer || "Customer"}</h2></div><span className="status-pill">{order.status}</span></div>
-      <div className="admin-detail-list">
-        <div><span>Phone</span><strong>{order.phone || "No phone"}</strong></div>
-        <div><span>Delivery</span><strong>{order.address || "No address"}, {order.zone || "No zone"}</strong></div>
-        <div><span>Gas</span><strong>{cylinder ? `${order.quantity} x ${gasLabel(cylinder, language)}` : "Gas order"}</strong></div>
-        <div><span>Store</span><strong>{store?.name || "Store pending"}</strong></div>
-        <div><span>Rider</span><strong>{rider?.name || "Rider pending"}</strong></div>
-        <div><span>Payment</span><strong>{order.paymentStatus || "Payment pending"} - {money(order.total || 0)}</strong></div>
+      <div className="admin-detail-card-list">
+        <div className="admin-detail-card wide"><span>Delivery address</span><strong>{order.address || "No address"}</strong><small>{order.zone || "No zone"} - {order.phone || "No phone"}</small></div>
+        <div className="admin-detail-card"><span>Gas</span><strong>{cylinder ? `${order.quantity} x ${gasLabel(cylinder, language)}` : "Gas order"}</strong></div>
+        <div className="admin-detail-card"><span>Store</span><strong>{store?.name || "Store pending"}</strong></div>
+        <div className="admin-detail-card"><span>Rider</span><strong>{rider?.name || "Rider pending"}</strong></div>
+        <div className="admin-detail-card"><span>Payment</span><strong>{money(order.total || 0)}</strong><small>{order.paymentStatus || "Payment pending"}</small></div>
       </div>
-      <div className="admin-status-actions">{deliveryStages.slice(1).map((stage) => <button className={order.status === stage ? "active" : ""} type="button" key={stage} onClick={() => onStatusChange(order.id, stage)}>{stage}</button>)}</div>
+      <div className="admin-detail-section">
+        <span>Status</span>
+        <div className="admin-status-actions">{deliveryStages.slice(1).map((stage) => <button className={order.status === stage ? "active" : ""} type="button" key={stage} onClick={() => onStatusChange(order.id, stage)}>{stage}</button>)}</div>
+      </div>
+      {onAssignRider && (
+        <label className="admin-detail-section">
+          <span>Assign rider</span>
+          <select value={order.riderId || ""} onChange={(event) => onAssignRider(order.id, event.target.value)}>
+            <option value="">Choose rider</option>
+            {riders.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}
+          </select>
+        </label>
+      )}
     </aside>
   );
 }
 
-function AdminInventory({ stores }) {
+function AdminDepots({ stores, onAddDepot }) {
+  const [form, setForm] = useState({ name: "", zone: zones[0], riders: 1, stock: 10 });
+
+  function submitDepot(event) {
+    event.preventDefault();
+    if (!form.name.trim()) return;
+    onAddDepot(form);
+    setForm({ name: "", zone: zones[0], riders: 1, stock: 10 });
+  }
+
+  return (
+    <div className="admin-orders-layout">
+      <form className="panel admin-compact-panel" onSubmit={submitDepot}>
+        <div className="section-heading"><div><p className="eyebrow">Onboard depots</p><h2>Add depot</h2></div></div>
+        <label>Depot name<input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder="Depot name" /></label>
+        <label>Zone<select value={form.zone} onChange={(event) => setForm((current) => ({ ...current, zone: event.target.value }))}>{zones.map((zone) => <option value={zone} key={zone}>{zone}</option>)}</select></label>
+        <label>Riders<input type="number" min="0" value={form.riders} onChange={(event) => setForm((current) => ({ ...current, riders: event.target.value }))} /></label>
+        <label>Opening stock per gas type<input type="number" min="0" value={form.stock} onChange={(event) => setForm((current) => ({ ...current, stock: event.target.value }))} /></label>
+        <button className="primary-action" type="submit"><Plus size={17} /> Add depot</button>
+      </form>
+      <div className="panel admin-compact-panel">
+        <div className="section-heading"><div><p className="eyebrow">Depot network</p><h2>Active depots</h2></div></div>
+        <div className="depot-network-table">
+          <div className="depot-network-head">
+            <span>Depot</span>
+            <span>Zone</span>
+            <span>Riders</span>
+            <span>Total stock</span>
+            <span>Status</span>
+          </div>
+          {stores.map((store) => {
+            const totalStock = Object.values(store.stock).reduce((total, count) => total + count, 0);
+            return (
+              <div className="depot-network-row" key={store.id}>
+                <strong><Store size={17} /> {store.name}</strong>
+                <span><MapPin size={15} /> {store.zone}</span>
+                <span>{store.riders}</span>
+                <span>{totalStock}</span>
+                <b>{store.open ? "Open" : "Closed"}</b>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AdminInventory({ stores, onUpdateStock }) {
   return (
     <div className="panel admin-compact-panel">
       <div className="section-heading"><div><p className="eyebrow">Inventory</p><h2>Store stock</h2></div></div>
-      <div className="admin-table-wrap">
-        <table className="admin-table">
-          <thead><tr><th>Store</th><th>Zone</th><th>Riders</th><th>Total stock</th><th>Lowest item</th></tr></thead>
-          <tbody>
-            {stores.map((store) => {
-              const stockEntries = Object.entries(store.stock);
-              const stockCount = stockEntries.reduce((total, [, count]) => total + count, 0);
-              const lowItem = [...stockEntries].sort((a, b) => a[1] - b[1])[0];
-              return <tr key={store.id}><td>{store.name}</td><td>{store.zone}</td><td>{store.riders}</td><td>{stockCount}</td><td>{lowItem ? `${lowItem[0]} (${lowItem[1]})` : "Ready"}</td></tr>;
-            })}
-          </tbody>
-        </table>
+      <div className="inventory-card-list">
+        {stores.map((store) => {
+          const stockEntries = Object.entries(store.stock);
+          const stockCount = stockEntries.reduce((total, [, count]) => total + count, 0);
+          return (
+            <div className="inventory-card" key={store.id}>
+              <div className="inventory-card-head">
+                <div>
+                  <strong>{store.name}</strong>
+                  <span><MapPin size={15} /> {store.zone}</span>
+                </div>
+                <div className="inventory-summary">
+                  <span><Users size={15} /> {store.riders} riders</span>
+                  <b>{stockCount} total</b>
+                </div>
+              </div>
+              <div className="stock-editor">
+                {stockEntries.map(([id, count]) => (
+                  <label key={id}>
+                    <span>{id}</span>
+                    <input type="number" min="0" value={count} onChange={(event) => onUpdateStock(store.id, id, event.target.value)} />
+                  </label>
+                ))}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -1542,6 +2001,99 @@ function AdminPayments({ orders, riders, stores, language, selectedOrderId, onSe
       </div>
       <AdminOrderTable orders={orders.filter((order) => order.payment === "cash" || order.paymentStatus)} riders={riders} stores={stores} language={language} selectedOrderId={selectedOrderId} onSelectOrder={onSelectOrder} onStatusChange={onStatusChange} />
     </div>
+  );
+}
+
+function AdminPromotions({ promoCodes, onSavePromo, onRemovePromo }) {
+  const [form, setForm] = useState({ code: "", type: "percent", value: 10, label: "" });
+  const promoEntries = Object.entries(promoCodes);
+
+  function submitPromo(event) {
+    event.preventDefault();
+    if (!form.code.trim()) return;
+    onSavePromo(form.code, form);
+    setForm({ code: "", type: "percent", value: 10, label: "" });
+  }
+
+  return (
+    <div className="admin-orders-layout">
+      <form className="panel admin-compact-panel" onSubmit={submitPromo}>
+        <div className="section-heading"><div><p className="eyebrow">Manage promotions</p><h2>Create promo</h2></div></div>
+        <label>Promo code<input value={form.code} onChange={(event) => setForm((current) => ({ ...current, code: event.target.value.toUpperCase() }))} placeholder="GAS10" /></label>
+        <label>Discount type<select value={form.type} onChange={(event) => setForm((current) => ({ ...current, type: event.target.value }))}><option value="percent">Percent</option><option value="fixed">Fixed amount</option></select></label>
+        <label>Value<input type="number" min="0" value={form.value} onChange={(event) => setForm((current) => ({ ...current, value: event.target.value }))} /></label>
+        <label>Label<input value={form.label} onChange={(event) => setForm((current) => ({ ...current, label: event.target.value }))} placeholder="10% off" /></label>
+        <button className="primary-action" type="submit"><Gift size={17} /> Save promo</button>
+      </form>
+      <div className="panel admin-compact-panel">
+        <div className="section-heading"><div><p className="eyebrow">Active offers</p><h2>Promotions</h2></div></div>
+        <div className="promo-card-list">
+          {promoEntries.map(([code, promo]) => (
+            <div className="promo-card" key={code}>
+              <div>
+                <strong>{code}</strong>
+                <span>{promo.label}</span>
+              </div>
+              <b>{promo.type === "percent" ? `${promo.value}% off` : `${money(promo.value)} off`}</b>
+              <button type="button" onClick={() => onRemovePromo(code)}><X size={16} /> Remove</button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SupplierDashboard({ orders, riders, stores, language, onStatusChange, onAssignRider, onUpdateStock }) {
+  const [storeId, setStoreId] = useState(stores[0]?.id || "");
+  const activeStore = stores.find((store) => store.id === storeId) || stores[0];
+  const depotOrders = orders.filter((order) => order.storeId === activeStore?.id);
+  const openOrders = depotOrders.filter((order) => order.status !== "Delivered");
+  const depotRevenue = depotOrders.reduce((total, order) => total + (order.total || 0), 0);
+  const depotRiders = riders.filter((rider) => rider.storeId === activeStore?.id);
+  const stockEntries = Object.entries(activeStore?.stock || {});
+
+  if (!activeStore) {
+    return <section className="workspace admin-workspace"><div className="empty-state"><Store size={28} /> No depots available</div></section>;
+  }
+
+  return (
+    <section className="workspace supplier-workspace">
+      <div className="admin-heading">
+        <div>
+          <p className="eyebrow">Depot / Supplier Dashboard</p>
+          <h2>{activeStore.name}</h2>
+        </div>
+        <select value={activeStore.id} onChange={(event) => setStoreId(event.target.value)}>
+          {stores.map((store) => <option value={store.id} key={store.id}>{store.name}</option>)}
+        </select>
+      </div>
+
+      <div className="admin-kpi-rail">
+        <div className="admin-kpi-card featured"><PackageCheck size={20} /><span>Receive orders</span><strong>{openOrders.length}</strong><small>{depotOrders.length} total</small></div>
+        <div className="admin-kpi-card"><Store size={20} /><span>Stock</span><strong>{stockEntries.reduce((total, [, count]) => total + count, 0)}</strong><small>{stockEntries.length} gas types</small></div>
+        <div className="admin-kpi-card"><Users size={20} /><span>Riders</span><strong>{depotRiders.length}</strong><small>available for assignment</small></div>
+        <div className="admin-kpi-card"><TrendingUp size={20} /><span>Revenue</span><strong>{money(depotRevenue)}</strong><small>from depot orders</small></div>
+      </div>
+
+      <div className="admin-orders-layout">
+        <div className="panel admin-compact-panel">
+          <div className="section-heading"><div><p className="eyebrow">Receive orders</p><h2>Depot orders</h2></div></div>
+          <AdminOrderTable orders={depotOrders} riders={depotRiders.length ? depotRiders : riders} stores={stores} language={language} selectedOrderId="" onSelectOrder={() => {}} onStatusChange={onStatusChange} onAssignRider={onAssignRider} />
+        </div>
+        <div className="panel admin-compact-panel">
+          <div className="section-heading"><div><p className="eyebrow">Manage stock</p><h2>Stock levels</h2></div></div>
+          <div className="supplier-stock-list">
+            {stockEntries.map(([id, count]) => (
+              <label key={id}>
+                {id}
+                <input type="number" min="0" value={count} onChange={(event) => onUpdateStock(activeStore.id, id, event.target.value)} />
+              </label>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -1723,12 +2275,13 @@ function LeafletTrackingMap({ store, destination, riderLocation, routeLocations,
 
     if (riderLocation) {
       layersRef.current.push(
-        L.circleMarker([riderLocation.lat, riderLocation.lng], {
-          color: "#ffffff",
-          fillColor: "#2563eb",
-          fillOpacity: 1,
-          radius: 9,
-          weight: 4
+        L.marker([riderLocation.lat, riderLocation.lng], {
+          icon: L.divIcon({
+            className: "rider-live-marker",
+            html: "<span></span>",
+            iconSize: [34, 34],
+            iconAnchor: [17, 17]
+          })
         }).addTo(map)
       );
       fitPoints.push([riderLocation.lat, riderLocation.lng]);
@@ -1795,7 +2348,7 @@ function LiveMap({ order, riderLocation, nowMs, language, t, onConfirmDelivered,
     : etaRangeText(store, destination, order.quantity || 1);
   const etaSeconds = hasLiveGps ? remainingEtaSeconds(order, riderLocation, destination, nowMs) : null;
   const etaDisplay = order.status === "Delivered" ? "Delivered" : hasLiveGps ? etaText(etaSeconds) : etaRangeDisplay;
-  const displayedRouteDistanceKm = routeState.distanceKm || savedRoadDistanceKm;
+  const displayedRouteDistanceKm = savedRoadDistanceKm;
   const etaSourceLabel = hasLiveGps ? t.riderGpsActive : t.waitingForRiderGpsLower;
   const etaLabel = etaDisplay;
   const isRiderOnWay = order.status === "On the way";
